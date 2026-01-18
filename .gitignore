@@ -9,6 +9,5 @@
 .cxx
 local.properties
 .trae/
-gradle/
 gradle-8.5/
 app/build/
