@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">BLive</string>
+    <string name="hello_world">Hello World!</string>
+    <string name="error_message">加载失败，请重试</string>
+    <string name="loading">加载中...</string>
+    <string name="live_list">直播列表</string>
+    <string name="category_hot">热门直播</string>
+    <string name="category_recommend">推荐直播</string>
+    <string name="category_follow">关注直播</string>
+</resources>

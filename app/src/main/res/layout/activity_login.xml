@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- 标题 -->
+    <TextView
+        android:id="@+id/login_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="50dp"
+        android:text="扫码登录"
+        android:textColor="@android:color/white"
+        android:textSize="28sp"
+        android:textStyle="bold" />
+
+    <!-- 状态提示文字 -->
+    <TextView
+        android:id="@+id/status_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/login_title"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="20dp"
+        android:text="请使用B站APP扫描下方二维码登录"
+        android:textColor="@android:color/white"
+        android:textSize="18sp" />
+
+    <!-- 二维码显示区域 -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/qr_code_container"
+        android:layout_width="300dp"
+        android:layout_height="300dp"
+        android:layout_centerInParent="true"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="8dp">
+
+        <ImageView
+            android:id="@+id/qr_code_image"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:background="@android:color/white" />
+    </androidx.cardview.widget.CardView>
+
+    <!-- 倒计时显示 -->
+    <TextView
+        android:id="@+id/countdown_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/qr_code_container"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="20dp"
+        android:text="180秒后自动刷新"
+        android:textColor="@android:color/white"
+        android:textSize="18sp" />
+
+    <!-- 取消按钮 -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cancel_button"
+        android:layout_width="200dp"
+        android:layout_height="60dp"
+        android:layout_below="@id/countdown_text"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="40dp"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        app:cardCornerRadius="8dp"
+        app:cardElevation="4dp"
+        android:background="#FF4081">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="取消登录"
+                android:textColor="@android:color/white"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+</RelativeLayout>
