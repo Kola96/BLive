@@ -51,6 +51,12 @@ android {
     lint {
         disable 'MissingTvBanner', 'ImpliedTouchscreenHardware', 'MissingLeanbackSupport'
     }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "BLive-${variant.name}-v${variant.versionName}.apk"
+        }
+    }
 }
 
 dependencies {
