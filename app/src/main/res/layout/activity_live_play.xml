@@ -12,7 +12,7 @@
         app:use_controller="false"
         app:show_buffering="when_playing" />
 
-    <com.example.blivetv.danmu.SimpleDanmuView
+    <com.blive.tv.danmu.SimpleDanmuView
         android:id="@+id/simple_danmu_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
