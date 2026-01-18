@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 焦点状态 -->
+    <item android:state_focused="true">
+        <layer-list>
+            <!-- 外层高亮边框 -->
+            <item>
+                <shape>
+                    <solid android:color="#888888" />
+                    <corners android:radius="4dp" />
+                </shape>
+            </item>
+            <!-- 内边距，形成边框效果 -->
+            <item android:bottom="2dp" android:left="2dp" android:right="2dp" android:top="2dp">
+                <shape>
+                    <solid android:color="#1a1a1a" />
+                    <corners android:radius="2dp" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <!-- 默认状态 -->
+    <item>
+        <shape>
+            <solid android:color="#1a1a1a" />
+            <corners android:radius="2dp" />
+        </shape>
+    </item>
+</selector>
