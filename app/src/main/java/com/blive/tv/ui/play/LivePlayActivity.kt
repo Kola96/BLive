@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.blive.tv.ui.play
 
 import android.graphics.Rect
@@ -23,6 +25,7 @@ import com.blive.tv.danmu.DanmuTcpClient
 import com.blive.tv.danmu.SimpleDanmuView
 import com.blive.tv.network.RetrofitClient
 import com.blive.tv.utils.TokenManager
+import com.blive.tv.utils.UserPreferencesManager
 
 class LivePlayActivity : AppCompatActivity() {
 
@@ -81,6 +84,17 @@ class LivePlayActivity : AppCompatActivity() {
         playSettingsRecyclerView = findViewById(R.id.play_settings_recycler_view)
         danmuSettingsRecyclerView = findViewById(R.id.danmu_settings_recycler_view)
         simpleDanmuView = findViewById(R.id.simple_danmu_view)
+        
+        // Initialize from Preferences
+        selectedQn = UserPreferencesManager.getQualityQn(this)
+        selectedDanmuEnable = UserPreferencesManager.isDanmakuEnabled(this)
+        selectedDanmuSize = UserPreferencesManager.getDanmakuSizeScale(this)
+        selectedDanmuOpacity = UserPreferencesManager.getDanmakuAlpha(this)
+        
+        // Apply danmaku settings
+        simpleDanmuView.isDanmuEnabled = selectedDanmuEnable
+        simpleDanmuView.danmuSizeScale = selectedDanmuSize
+        simpleDanmuView.danmuAlpha = selectedDanmuOpacity
         
         currentRoomId = intent.getLongExtra("room_id", -1L)
         Log.d(TAG, "开始播放直播间，roomId: $currentRoomId")
@@ -398,8 +412,6 @@ class LivePlayActivity : AppCompatActivity() {
 
         // 处理焦点恢复
         if (focusTargetId != null || shouldFocusSelectedOption) {
-            val targetRecyclerView = if (currentExpandedCategory?.startsWith("danmu") == true || focusTargetId?.startsWith("0") == true || focusTargetId?.startsWith("1") == true || focusTargetId?.contains(".") == true) danmuSettingsRecyclerView else playSettingsRecyclerView
-            
             // 延迟一帧等待 RecyclerView 更新
             playSettingsRecyclerView.post {
                 restoreFocus(playSettingsRecyclerView, playSettingsAdapter, focusTargetId, shouldFocusSelectedOption)
@@ -510,20 +522,20 @@ class LivePlayActivity : AppCompatActivity() {
                             }
                             
                             // 获取弹幕服务器信息，无论是否登录都尝试启动弹幕客户端
-                            fetchDanmuInfo(roomId, cookie)
+                            fetchDanmuInfo()
                         } else {
                             Log.e(TAG, "API返回错误，code: ${playInfoResponse?.code}, message: ${playInfoResponse?.message}")
                             showError("获取播放信息失败：${playInfoResponse?.message}")
                             
                             // 即使API返回错误，也尝试启动弹幕客户端
-                            fetchDanmuInfo(roomId, cookie)
+                            fetchDanmuInfo()
                         }
                     } else {
                         Log.e(TAG, "网络请求失败，响应码: ${response.code()}")
                         showError("网络请求失败：${response.code()}")
                         
                         // 即使网络请求失败，也尝试启动弹幕客户端
-                        fetchDanmuInfo(roomId, cookie)
+                        fetchDanmuInfo()
                     }
                 }
 
@@ -535,7 +547,7 @@ class LivePlayActivity : AppCompatActivity() {
                     showError("网络连接错误：${t.message}")
                     
                     // 即使网络请求失败，也尝试启动弹幕客户端
-                    fetchDanmuInfo(roomId, cookie)
+                    fetchDanmuInfo()
                 }
             }
         )
@@ -544,7 +556,7 @@ class LivePlayActivity : AppCompatActivity() {
     /**
      * 获取弹幕服务器信息 - 已废弃，改用DanmuTcpClient内部实现
      */
-    private fun fetchDanmuInfo(_roomId: Long, _cookie: String) {
+    private fun fetchDanmuInfo() {
         Log.d(TAG, "开始启动弹幕TCP客户端")
         danmuTcpClient.start()
     }
@@ -571,6 +583,26 @@ class LivePlayActivity : AppCompatActivity() {
             }
         }
         
+        // Calculate best quality based on preferences
+        val prefQn = UserPreferencesManager.getQualityQn(this)
+        if (qualitySet.isNotEmpty()) {
+            if (qualitySet.contains(prefQn)) {
+                selectedQn = prefQn
+            } else {
+                val maxQn = qualitySet.maxOrNull() ?: 0
+                val minQn = qualitySet.minOrNull() ?: 0
+                
+                if (maxQn < prefQn) {
+                    selectedQn = maxQn
+                } else if (minQn > prefQn) {
+                    selectedQn = minQn
+                } else {
+                    // Find largest qn in qualitySet that is < prefQn
+                    selectedQn = qualitySet.filter { it < prefQn }.maxOrNull() ?: maxQn
+                }
+            }
+        }
+
         qualityOptions = qualitySet.map { qn ->
             val name = when (qn) {
                 10000 -> "原画"
@@ -600,8 +632,6 @@ class LivePlayActivity : AppCompatActivity() {
             selectedCdnHost = cdnOptions[0].host
         }
         
-        updateCategories()
-        
         Log.d(TAG, "解析到 ${qualityOptions.size} 个清晰度选项")
         Log.d(TAG, "解析到 ${cdnOptions.size} 个CDN选项")
         Log.d(TAG, "解析到 ${codecOptions.size} 个编码选项")
@@ -615,6 +645,10 @@ class LivePlayActivity : AppCompatActivity() {
         )
         
         // 初始化弹幕透明度选项
+        val rawOpacityOptions = listOf(0.25f, 0.5f, 0.75f, 1.0f)
+        // 吸附到最近的有效值
+        selectedDanmuOpacity = rawOpacityOptions.minByOrNull { Math.abs(it - selectedDanmuOpacity) } ?: 1.0f
+        
         danmuOpacityOptions = listOf(
             DanmuOpacityOption(0.25f, "25%", isSelected = selectedDanmuOpacity == 0.25f),
             DanmuOpacityOption(0.5f, "50%", isSelected = selectedDanmuOpacity == 0.5f),
@@ -623,13 +657,23 @@ class LivePlayActivity : AppCompatActivity() {
         )
         
         // 初始化弹幕字号选项
+        val rawSizeOptions = listOf(0.5f, 0.75f, 1.0f, 1.5f, 2.0f)
+        // 吸附到最近的有效值
+        selectedDanmuSize = rawSizeOptions.minByOrNull { Math.abs(it - selectedDanmuSize) } ?: 1.0f
+        
         danmuSizeOptions = listOf(
             DanmuSizeOption(0.5f, "50%", isSelected = selectedDanmuSize == 0.5f),
-            DanmuSizeOption(0.75f, "75%", isSelected = selectedDanmuSize == 2.5f),
+            DanmuSizeOption(0.75f, "75%", isSelected = selectedDanmuSize == 0.75f),
             DanmuSizeOption(1.0f, "100%", isSelected = selectedDanmuSize == 1.0f),
             DanmuSizeOption(1.5f, "150%", isSelected = selectedDanmuSize == 1.5f),
             DanmuSizeOption(2.0f, "200%", isSelected = selectedDanmuSize == 2.0f)
         )
+        
+        // 更新弹幕View的设置以保持一致
+        simpleDanmuView.danmuAlpha = selectedDanmuOpacity
+        simpleDanmuView.danmuSizeScale = selectedDanmuSize
+        
+        updateCategories()
     }
     
     private fun buildPlayUrlWithSelection(): String {
@@ -734,15 +778,6 @@ class LivePlayActivity : AppCompatActivity() {
                                     val baseUrl = codec.baseUrl
                                     val extra = urlInfo.extra
                                     val fullUrl = "$host$baseUrl$extra"
-                                    
-                                    val qnName = when (targetQn) {
-                                        10000 -> "原画"
-                                        400 -> "蓝光"
-                                        250 -> "超清"
-                                        150 -> "高清"
-                                        80 -> "流畅"
-                                        else -> "未知"
-                                    }
                                     
                                     // Log.d(TAG, "找到流: $targetProtocol/$targetFormat/$targetCodec/$qnName($targetQn) - CDN: ${host.substringAfter("://").substringBefore(".")}")
                                     urls.add(fullUrl)
