@@ -28,7 +28,7 @@ class SimpleDanmuView @JvmOverloads constructor(
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
     private val trackCount = 10 // 默认10个轨道
-    private val tracks = BooleanArray(trackCount) { true } // 轨道占用状态，true表示空闲
+    private val tracks = LongArray(trackCount) { 0L } // 轨道可用时间戳，0表示空闲
     private val danmuQueue: Queue<DanmuItem> = LinkedList()
     
     // 配置参数
@@ -131,10 +131,14 @@ class SimpleDanmuView @JvmOverloads constructor(
         textView.y = topMargin.toFloat()
 
         addView(textView)
-        tracks[trackIndex] = false // 标记轨道占用
 
         // 计算动画时长 (基础时长 8000ms)
         val duration = (8000 / danmuSpeedScale).toLong()
+
+        // 计算弹幕完全进入屏幕所需时间 (plus spacing)
+        val spacing = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20f, resources.displayMetrics)
+        val timeToEnter = (duration * (viewWidth + spacing) / (width + viewWidth)).toLong()
+        tracks[trackIndex] = System.currentTimeMillis() + timeToEnter
         
         // 创建平移动画
         val animator = ObjectAnimator.ofFloat(textView, "translationX", width.toFloat(), -viewWidth.toFloat())
@@ -149,15 +153,6 @@ class SimpleDanmuView @JvmOverloads constructor(
         
         // 保存动画引用以便后续变速
         textView.tag = animator
-
-        // 监听动画过程，提前释放轨道
-        // 当弹幕完全进入屏幕后，轨道即可释放给下一条弹幕
-        // 这里简单处理：延时 1500ms 后释放轨道
-        postDelayed({
-            if (trackIndex >= 0 && trackIndex < tracks.size) {
-                tracks[trackIndex] = true
-            }
-        }, (1500 / danmuSpeedScale).toLong())
 
         animator.start()
     }
@@ -206,12 +201,10 @@ class SimpleDanmuView @JvmOverloads constructor(
     }
 
     private fun findAvailableTrack(): Int {
-        // 随机尝试寻找一个空闲轨道，避免总是堆积在上面
-        val start = Random.nextInt(trackCount)
+        val now = System.currentTimeMillis()
         for (i in 0 until trackCount) {
-            val idx = (start + i) % trackCount
-            if (tracks[idx]) {
-                return idx
+            if (now >= tracks[i]) {
+                return i
             }
         }
         return -1 // 没有空闲轨道
@@ -223,7 +216,7 @@ class SimpleDanmuView @JvmOverloads constructor(
     fun clear() {
         removeAllViews()
         for (i in tracks.indices) {
-            tracks[i] = true
+            tracks[i] = 0L
         }
     }
 }
