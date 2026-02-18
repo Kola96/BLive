@@ -7,4 +7,15 @@
     <string name="category_hot">热门直播</string>
     <string name="category_recommend">推荐直播</string>
     <string name="category_follow">关注直播</string>
+    <string name="settings_title">偏好设置</string>
+    <string name="quality_label">默认画质</string>
+    <string name="danmaku_switch_label">弹幕开关</string>
+    <string name="danmaku_size_label">弹幕字号</string>
+    <string name="danmaku_alpha_label">弹幕透明度</string>
+    <string name="close">关闭</string>
+    <string name="quality_original">原画</string>
+    <string name="quality_blue_ray">蓝光</string>
+    <string name="quality_super_hd">超清</string>
+    <string name="quality_hd">高清</string>
+    <string name="quality_smooth">流畅</string>
 </resources>

@@ -377,14 +377,20 @@ class MainActivity : AppCompatActivity() {
         val popupMenu = android.widget.PopupMenu(this, anchorView)
         
         // 动态添加菜单项
-        popupMenu.menu.add(0, 0, 0, "登出")
+        popupMenu.menu.add(0, 0, 0, "偏好设置")
+        popupMenu.menu.add(0, 1, 1, "登出")
         
         popupMenu.setOnMenuItemClickListener { menuItem ->
-            if (menuItem.itemId == 0) {
-                logout()
-                true
-            } else {
-                false
+            when (menuItem.itemId) {
+                0 -> {
+                    com.blive.tv.ui.settings.SettingsDialogFragment().show(supportFragmentManager, "settings")
+                    true
+                }
+                1 -> {
+                    logout()
+                    true
+                }
+                else -> false
             }
         }
         

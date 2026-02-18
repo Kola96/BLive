@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@drawable/dialog_background"
+    android:minWidth="350dp">
+
+    <TextView
+        android:id="@+id/tv_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_title"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/white" />
+
+    <!-- 画质设置 -->
+    <LinearLayout
+        android:id="@+id/container_quality"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:focusable="true"
+        android:background="@drawable/option_selector_background"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/quality_label"
+            android:textSize="18sp"
+            android:textColor="@android:color/white"
+            android:layout_weight="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="&lt;"
+            android:textSize="18sp"
+            android:textColor="#80FFFFFF"
+            android:paddingEnd="8dp" />
+
+        <TextView
+            android:id="@+id/tv_quality_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="原画"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:minWidth="60dp"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="&gt;"
+            android:textSize="18sp"
+            android:textColor="#80FFFFFF"
+            android:paddingStart="8dp" />
+    </LinearLayout>
+
+    <!-- 弹幕开关 -->
+    <LinearLayout
+        android:id="@+id/container_danmaku_switch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:focusable="true"
+        android:background="@drawable/option_selector_background"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/danmaku_switch_label"
+            android:textSize="18sp"
+            android:textColor="@android:color/white"
+            android:layout_weight="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="&lt;"
+            android:textSize="18sp"
+            android:textColor="#80FFFFFF"
+            android:paddingEnd="8dp" />
+
+        <TextView
+            android:id="@+id/tv_danmaku_switch_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="开启"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:minWidth="60dp"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="&gt;"
+            android:textSize="18sp"
+            android:textColor="#80FFFFFF"
+            android:paddingStart="8dp" />
+    </LinearLayout>
+
+    <!-- 弹幕字号 -->
+    <LinearLayout
+        android:id="@+id/container_danmaku_size"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:focusable="true"
+        android:background="@drawable/option_selector_background"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/danmaku_size_label"
+            android:textSize="18sp"
+            android:textColor="@android:color/white"
+            android:layout_weight="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="&lt;"
+            android:textSize="18sp"
+            android:textColor="#80FFFFFF"
+            android:paddingEnd="8dp" />
+
+        <TextView
+            android:id="@+id/tv_danmaku_size_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="100%"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:minWidth="60dp"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="&gt;"
+            android:textSize="18sp"
+            android:textColor="#80FFFFFF"
+            android:paddingStart="8dp" />
+    </LinearLayout>
+
+    <!-- 弹幕透明度 -->
+    <LinearLayout
+        android:id="@+id/container_danmaku_alpha"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:focusable="true"
+        android:background="@drawable/option_selector_background"
+        android:layout_marginBottom="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/danmaku_alpha_label"
+            android:textSize="18sp"
+            android:textColor="@android:color/white"
+            android:layout_weight="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="&lt;"
+            android:textSize="18sp"
+            android:textColor="#80FFFFFF"
+            android:paddingEnd="8dp" />
+
+        <TextView
+            android:id="@+id/tv_danmaku_alpha_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="100%"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:minWidth="60dp"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="&gt;"
+            android:textSize="18sp"
+            android:textColor="#80FFFFFF"
+            android:paddingStart="8dp" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/btn_close"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/close"
+        android:textSize="16sp"
+        android:textColor="@android:color/white"
+        android:background="@drawable/option_selector_background"
+        android:padding="12dp" />
+
+</LinearLayout>
