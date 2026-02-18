@@ -40,6 +40,8 @@ class MainActivity : AppCompatActivity() {
         setupUserAvatarClick()
     }
 
+    private var lastFocusPositionFromGrid = 0
+
     // 初始化Header
     private fun initHeader() {
         // Header已经在布局中定义，这里可以添加额外的初始化逻辑
@@ -314,6 +316,45 @@ class MainActivity : AppCompatActivity() {
                 showUserMenu(userAvatarContainer)
             }
         }
+        
+        userAvatarContainer.setOnKeyListener { _, keyCode, event ->
+            if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+                when (keyCode) {
+                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        val gridView = findViewById<androidx.leanback.widget.VerticalGridView>(R.id.main_grid)
+                        val adapter = gridView.adapter as? LiveRoomAdapter
+                        val itemCount = adapter?.itemCount ?: 0
+                        if (gridView.visibility == android.view.View.VISIBLE && itemCount > 0) {
+                            gridView.scrollToPosition(0)
+                            gridView.post {
+                                val holder = gridView.findViewHolderForAdapterPosition(0)
+                                if (holder != null) {
+                                    holder.itemView.requestFocus()
+                                } else {
+                                    val child = gridView.getChildAt(0)
+                                    child?.requestFocus()
+                                }
+                            }
+                        }
+                        return@setOnKeyListener true
+                    }
+                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        val nickname = findViewById<android.widget.TextView>(R.id.user_nickname)
+                        if (nickname.isFocusable) {
+                            nickname.requestFocus()
+                        }
+                        return@setOnKeyListener true
+                    }
+                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        return@setOnKeyListener true
+                    }
+                    android.view.KeyEvent.KEYCODE_DPAD_UP -> {
+                        return@setOnKeyListener true
+                    }
+                }
+            }
+            false
+        }
     }
 
     // 显示用户菜单
@@ -368,64 +409,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
-        // 处理焦点导航，修复TCL Q9L pro上的焦点跳转问题
-        if (TokenManager.isLoggedIn(this)) {
-            val gridView = findViewById<androidx.leanback.widget.VerticalGridView>(R.id.main_grid)
-            if (gridView.visibility == View.VISIBLE) {
-                val currentFocus = currentFocus
-                if (currentFocus != null) {
-                    val focusedPos = gridView.getChildAdapterPosition(currentFocus)
-                    if (focusedPos != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
-                        val adapter = gridView.adapter as? LiveRoomAdapter
-                        val itemCount = adapter?.itemCount ?: 0
-                        val spanCount = 4
-                        
-                        when (keyCode) {
-                            android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                val nextPos = focusedPos + 1
-                                if (nextPos < itemCount) {
-                                    val nextViewHolder = gridView.findViewHolderForAdapterPosition(nextPos)
-                                    if (nextViewHolder != null) {
-                                        nextViewHolder.itemView.requestFocus()
-                                        return true
-                                    }
-                                }
-                            }
-                            android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
-                                val prevPos = focusedPos - 1
-                                if (prevPos >= 0) {
-                                    val prevViewHolder = gridView.findViewHolderForAdapterPosition(prevPos)
-                                    if (prevViewHolder != null) {
-                                        prevViewHolder.itemView.requestFocus()
-                                        return true
-                                    }
-                                }
-                            }
-                            android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
-                                val nextPos = focusedPos + spanCount
-                                if (nextPos < itemCount) {
-                                    val nextViewHolder = gridView.findViewHolderForAdapterPosition(nextPos)
-                                    if (nextViewHolder != null) {
-                                        nextViewHolder.itemView.requestFocus()
-                                        return true
-                                    }
-                                }
-                            }
-                            android.view.KeyEvent.KEYCODE_DPAD_UP -> {
-                                val prevPos = focusedPos - spanCount
-                                if (prevPos >= 0) {
-                                    val prevViewHolder = gridView.findViewHolderForAdapterPosition(prevPos)
-                                    if (prevViewHolder != null) {
-                                        prevViewHolder.itemView.requestFocus()
-                                        return true
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
         
         return super.onKeyDown(keyCode, event)
     }
@@ -485,8 +468,14 @@ class MainActivity : AppCompatActivity() {
                         if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
                             // 如果焦点在第一行，切换到用户头像
                             if (adapterPosition >= 0 && adapterPosition < 4) {
+                                lastFocusPositionFromGrid = adapterPosition
                                 val userAvatarContainer = itemView.rootView.findViewById<android.widget.FrameLayout>(R.id.user_avatar_container)
                                 userAvatarContainer.requestFocus()
+                                return@setOnKeyListener true
+                            }
+                        } else if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
+                            // 如果是最后一个Item，按右键时保持焦点，防止焦点丢失
+                            if (adapterPosition == itemCount - 1) {
                                 return@setOnKeyListener true
                             }
                         }
@@ -496,10 +485,13 @@ class MainActivity : AppCompatActivity() {
                 
                 // 设置点击事件，点击卡片跳转到播放页面
                 itemView.setOnClickListener {
-                    val liveRoom = liveRooms[adapterPosition]
-                    val intent = android.content.Intent(itemView.context, com.blive.tv.ui.play.LivePlayActivity::class.java)
-                    intent.putExtra("room_id", liveRoom.roomId)
-                    itemView.context.startActivity(intent)
+                    val pos = bindingAdapterPosition
+                    if (pos != androidx.recyclerview.widget.RecyclerView.NO_POSITION && pos >= 0 && pos < liveRooms.size) {
+                        val liveRoom = liveRooms[pos]
+                        val intent = android.content.Intent(itemView.context, com.blive.tv.ui.play.LivePlayActivity::class.java)
+                        intent.putExtra("room_id", liveRoom.roomId)
+                        itemView.context.startActivity(intent)
+                    }
                 }
             }
             
