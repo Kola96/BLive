@@ -180,7 +180,7 @@ class MainActivity : AppCompatActivity() {
                                 }
                                 
                                 // 如果当前页所有直播间都是直播状态，且不是最后一页，则继续获取下一页
-                                if (shouldContinueFetching && page < (liveUsersResponse.data?.totalPage ?: 1)) {
+                                if (shouldContinueFetching && page < liveUsersResponse.data.totalPage) {
                                     fetchLiveUsersPage(cookie, page + 1, accumulatedRooms)
                                 } else {
                                     // 停止翻页，处理所有收集到的直播间数据
@@ -482,15 +482,15 @@ class MainActivity : AppCompatActivity() {
                     if (event.action == android.view.KeyEvent.ACTION_DOWN) {
                         if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
                             // 如果焦点在第一行，切换到用户头像
-                            if (adapterPosition >= 0 && adapterPosition < 4) {
-                                lastFocusPositionFromGrid = adapterPosition
+                            if (bindingAdapterPosition >= 0 && bindingAdapterPosition < 4) {
+                                lastFocusPositionFromGrid = bindingAdapterPosition
                                 val userAvatarContainer = itemView.rootView.findViewById<android.widget.FrameLayout>(R.id.user_avatar_container)
                                 userAvatarContainer.requestFocus()
                                 return@setOnKeyListener true
                             }
                         } else if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
                             // 如果是最后一个Item，按右键时保持焦点，防止焦点丢失
-                            if (adapterPosition == itemCount - 1) {
+                            if (bindingAdapterPosition == itemCount - 1) {
                                 return@setOnKeyListener true
                             }
                         }
@@ -501,7 +501,7 @@ class MainActivity : AppCompatActivity() {
                 // 设置点击事件，点击卡片跳转到播放页面
                 itemView.setOnClickListener {
                     val pos = bindingAdapterPosition
-                    if (pos != androidx.recyclerview.widget.RecyclerView.NO_POSITION && pos >= 0 && pos < liveRooms.size) {
+                    if (pos in liveRooms.indices) {
                         val liveRoom = liveRooms[pos]
                         
                         // 记录点击的直播间ID
