@@ -42,6 +42,19 @@ class SettingsDialogFragment : DialogFragment() {
     private val danmakuSizes = listOf(0.5f, 0.75f, 1.0f, 1.5f, 2.0f)
     private val danmakuAlphas = listOf(0.25f, 0.5f, 0.75f, 1.0f)
 
+    override fun onStart() {
+        super.onStart()
+        dialog?.window?.let { window ->
+            // 设置背景为透明，消除圆角外的白色尖角
+            window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            // 设置宽高属性
+            window.setLayout(
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,

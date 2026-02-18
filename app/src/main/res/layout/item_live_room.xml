@@ -7,12 +7,12 @@
     android:focusableInTouchMode="true"
     android:background="@drawable/card_focused_background">
 
-    <!-- 相对布局容器 -->
+    <!-- 相对布局容器：固定高度 220dp -->
     <RelativeLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="220dp"
         android:layout_margin="4dp"
-        android:background="#1d1e23">
+        android:background="@android:color/black">
 
         <!-- 直播封面 704*396 比例 -->
         <ImageView
@@ -58,42 +58,38 @@
             android:maxLines="1"
             android:ellipsize="end" />
 
-        <!-- 信息容器 -->
-        <LinearLayout
+        <!-- 直播间标题：位于封面下方 12dp -->
+        <TextView
+            android:id="@+id/room_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_below="@id/cover_image"
-            android:orientation="vertical"
-            android:padding="10dp"
-            android:background="@android:color/black">
+            android:layout_marginTop="12dp"
+            android:layout_marginLeft="10dp"
+            android:layout_marginRight="10dp"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
 
-            <!-- 直播间标题 -->
-            <TextView
-                android:id="@+id/room_title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="@android:color/white"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:maxLines="1"
-                android:ellipsize="end" />
-
-            <!-- 直播间分区 -->
-            <TextView
-                android:id="@+id/area_name"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@android:color/white"
-                android:textSize="10sp"
-                android:background="@drawable/rounded_tag"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="3dp"
-                android:layout_marginTop="4dp"
-                android:backgroundTint="#2b2c38"
-                android:maxLines="1"
-                android:ellipsize="end"
-                android:gravity="center"
-                android:alpha="0.9" />
-        </LinearLayout>
+        <!-- 直播间分区：位于底部 12dp -->
+        <TextView
+            android:id="@+id/area_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_marginBottom="12dp"
+            android:layout_marginLeft="10dp"
+            android:textColor="@android:color/white"
+            android:textSize="10sp"
+            android:background="@drawable/rounded_tag"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="3dp"
+            android:backgroundTint="#2b2c38"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:alpha="0.9" />
     </RelativeLayout>
 </FrameLayout>

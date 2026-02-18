@@ -39,6 +39,12 @@ class LivePlayActivity : AppCompatActivity() {
     
     private var player: ExoPlayer? = null
     private var helperPlayer: ExoPlayer? = null
+    
+    // 双流加载相关变量
+    private var fastPlayer: ExoPlayer? = null
+    private var targetPlayer: ExoPlayer? = null
+    private var hasFirstFrameShown: Boolean = false
+    
     private var refreshTimer: android.os.CountDownTimer? = null
     // 90 minutes in milliseconds
     private val REFRESH_INTERVAL = 90 * 60 * 1000L
@@ -483,18 +489,28 @@ class LivePlayActivity : AppCompatActivity() {
     }
     
     private fun rebuildAndPlayUrl() {
-        // 取消可能正在进行的无缝刷新
-        helperPlayer?.release()
-        helperPlayer = null
+        // 如果用户手动切换，取消正在进行的双流加载
+        cancelDualLoading()
         
         val url = buildPlayUrlWithSelection()
         if (url.isNotEmpty()) {
-            Log.d(TAG, "重新构建播放URL: $url")
-            player?.release()
-            player = null
-            initializePlayer(url)
+            Log.d(TAG, "手动切换: 开始无缝切换到 $url")
+            prepareHelperPlayer(url)
         } else {
             Toast.makeText(this, "该配置下没有可用的流", Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    private fun cancelDualLoading() {
+        if (targetPlayer != null) {
+            Log.d(TAG, "取消Target Player加载")
+            targetPlayer?.release()
+            targetPlayer = null
+        }
+        if (fastPlayer != null) {
+            Log.d(TAG, "取消Fast Player加载")
+            fastPlayer?.release()
+            fastPlayer = null
         }
     }
 
@@ -525,7 +541,14 @@ class LivePlayActivity : AppCompatActivity() {
                             if (playUrlList.isNotEmpty()) {
                                 Log.d(TAG, "成功构建 ${playUrlList.size} 个播放URL")
                                 currentUrlIndex = 0
-                                initializePlayer(playUrlList[currentUrlIndex])
+                                
+                                // 双流竞速加载逻辑
+                                val data = playInfoResponse.data
+                                if (data != null) {
+                                    startDualLoading(data)
+                                } else {
+                                    initializePlayer(playUrlList[0])
+                                }
                             } else {
                                 Log.e(TAG, "无法构建播放URL")
                                 showError("无法获取播放地址")
@@ -800,6 +823,210 @@ class LivePlayActivity : AppCompatActivity() {
         }
         
         return urls
+    }
+
+    // --- 双流竞速加载逻辑 ---
+    
+    private fun startDualLoading(data: com.blive.tv.data.model.RoomPlayInfoData) {
+        hasFirstFrameShown = false
+        loadingProgress.visibility = View.VISIBLE
+        errorText.visibility = View.GONE
+        
+        // 1. 获取目标画质URL
+        val targetUrl = buildPlayUrlWithSelection()
+        
+        // 2. 获取最低画质URL (通常是最后一个选项)
+        // 找到qn最小的选项
+        val minQn = qualityOptions.minByOrNull { it.qn }?.qn ?: selectedQn
+        val fastUrl = if (minQn != selectedQn) {
+             var url = findStreamUrl(data, "http_stream", "flv", selectedCodec, minQn, selectedCdnHost)
+             if (url.isEmpty()) {
+                 url = findStreamUrl(data, "http_stream", "ts", selectedCodec, minQn, selectedCdnHost)
+             }
+             url
+        } else {
+            targetUrl
+        }
+        
+        Log.d(TAG, "双流加载: Target($selectedQn)=$targetUrl")
+        Log.d(TAG, "双流加载: Fast($minQn)=$fastUrl")
+        
+        if (targetUrl == fastUrl || fastUrl.isEmpty()) {
+            // 如果一样，或者找不到FastUrl，就只加载目标流
+            initializePlayer(targetUrl)
+        } else {
+            // 启动双流竞速
+            loadTargetPlayer(targetUrl)
+            loadFastPlayer(fastUrl)
+        }
+    }
+    
+    private fun loadTargetPlayer(url: String) {
+        Log.d(TAG, "开始加载 Target Player")
+        targetPlayer?.release()
+        targetPlayer = ExoPlayer.Builder(this).build().also { exoPlayer ->
+            exoPlayer.volume = 0f // 静音预加载
+            val mediaItem = MediaItem.fromUri(url)
+            exoPlayer.setMediaItem(mediaItem)
+            exoPlayer.prepare()
+            exoPlayer.playWhenReady = true
+            
+            exoPlayer.addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) {
+                        Log.d(TAG, "Target Player Ready!")
+                        onTargetPlayerReady(exoPlayer)
+                    }
+                }
+                
+                override fun onPlayerError(error: PlaybackException) {
+                    Log.e(TAG, "Target Player Error", error)
+                    targetPlayer?.release()
+                    targetPlayer = null
+                    // 如果Fast Player也在报错，或者Fast Player不存在，这里可能需要兜底处理
+                    // 但通常Fast Player会负责播放，或者如果都挂了，用户会看到Loading不动
+                    if (fastPlayer == null && !hasFirstFrameShown) {
+                         tryNextUrl(error)
+                    }
+                }
+            })
+        }
+    }
+    
+    private fun loadFastPlayer(url: String) {
+        Log.d(TAG, "开始加载 Fast Player")
+        fastPlayer?.release()
+        fastPlayer = ExoPlayer.Builder(this).build().also { exoPlayer ->
+            exoPlayer.volume = 0f
+            val mediaItem = MediaItem.fromUri(url)
+            exoPlayer.setMediaItem(mediaItem)
+            exoPlayer.prepare()
+            exoPlayer.playWhenReady = true
+            
+            exoPlayer.addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) {
+                        Log.d(TAG, "Fast Player Ready!")
+                        onFastPlayerReady(exoPlayer)
+                    }
+                }
+                
+                override fun onPlayerError(error: PlaybackException) {
+                    Log.e(TAG, "Fast Player Error", error)
+                    fastPlayer?.release()
+                    fastPlayer = null
+                    
+                    // 如果Target Player也不存在（例如也失败了），且没有画面显示，则尝试下一个URL
+                    if (targetPlayer == null && !hasFirstFrameShown) {
+                         tryNextUrl(error)
+                    }
+                }
+            })
+        }
+    }
+    
+    private fun onTargetPlayerReady(exoPlayer: ExoPlayer) {
+        runOnUiThread {
+            if (isFinishing || isDestroyed) {
+                exoPlayer.release()
+                return@runOnUiThread
+            }
+            
+            // 检查是否已被取消（例如用户手动切换了）
+            if (targetPlayer != exoPlayer) {
+                Log.d(TAG, "Target Player 已过期或被取消，忽略回调")
+                exoPlayer.release()
+                return@runOnUiThread
+            }
+            
+            if (!hasFirstFrameShown) {
+                // Target 赢了 (或者 Fast 还没好)
+                Log.d(TAG, "Target Player 胜出，直接上屏")
+                hasFirstFrameShown = true
+                
+                // 绑定到View
+                playerView.player = exoPlayer
+                exoPlayer.volume = 1.0f
+                setupPlayerListener(exoPlayer)
+                
+                player = exoPlayer
+                targetPlayer = null // 转移所有权
+                
+                // 销毁 Fast Player
+                fastPlayer?.release()
+                fastPlayer = null
+                
+                // 启动定时器
+                startRefreshTimer()
+                
+            } else {
+                // Fast 已经在播了，执行无缝切换
+                Log.d(TAG, "Fast Player 已在播，执行无缝切换到 Target")
+                
+                // 复用 performSwitch 逻辑，但这里是从 targetPlayer 切
+                // 这里 targetPlayer 就是 exoPlayer
+                // helperPlayer 逻辑是用于手动切换/刷新，这里是首屏竞速的特殊切换
+                // 我们临时把 targetPlayer 赋值给 helperPlayer 以复用 performSwitch? 
+                // 或者直接写切换逻辑更清晰
+                
+                val oldPlayer = player
+                
+                playerView.player = exoPlayer
+                exoPlayer.volume = 1.0f
+                setupPlayerListener(exoPlayer)
+                
+                oldPlayer?.stop()
+                oldPlayer?.release()
+                
+                player = exoPlayer
+                targetPlayer = null
+                
+                // 重启定时器
+                startRefreshTimer()
+            }
+        }
+    }
+    
+    private fun onFastPlayerReady(exoPlayer: ExoPlayer) {
+        runOnUiThread {
+            if (isFinishing || isDestroyed) {
+                exoPlayer.release()
+                return@runOnUiThread
+            }
+            
+            // 检查是否已被取消
+            if (fastPlayer != exoPlayer) {
+                Log.d(TAG, "Fast Player 已过期或被取消，忽略回调")
+                exoPlayer.release()
+                return@runOnUiThread
+            }
+            
+            if (!hasFirstFrameShown) {
+                // Fast 赢了
+                Log.d(TAG, "Fast Player 胜出，先上屏")
+                hasFirstFrameShown = true
+                
+                playerView.player = exoPlayer
+                exoPlayer.volume = 1.0f
+                // 注意：Fast Player 也要设置 Listener 吗？
+                // 是的，因为需要监听 Error 和 State
+                // 但要注意，当 Target Ready 切换时，这个 Listener 会被移除/替换
+                setupPlayerListener(exoPlayer)
+                
+                player = exoPlayer
+                fastPlayer = null // 转移所有权
+                
+                // 此时 targetPlayer 还在后台加载，等它 Ready 会触发 onTargetPlayerReady 分支2
+                
+                // 启动定时器 (虽然是低画质，但也算开始了)
+                startRefreshTimer()
+            } else {
+                // Target 已经在播了 (Target 赢了)，Fast 后加载完
+                Log.d(TAG, "Target 已在播，丢弃 Fast Player")
+                exoPlayer.release()
+                fastPlayer = null
+            }
+        }
     }
 
     private fun initializePlayer(url: String) {
@@ -1194,9 +1421,15 @@ class LivePlayActivity : AppCompatActivity() {
     }
     
     private fun prepareHelperPlayer(url: String) {
-        Log.d(TAG, "准备辅助播放器，URL: $url")
+        Log.d(TAG, "准备辅助播放器(无缝切换)，URL: $url")
         // 确保先释放之前的（如果有）
         helperPlayer?.release() 
+        
+        // 告诉用户正在切换
+        if (!hasFirstFrameShown) {
+             // 只有在首屏加载时才显示Loading，手动切换时静默加载
+             loadingProgress.visibility = View.VISIBLE
+        }
         
         helperPlayer = ExoPlayer.Builder(this).build().also { exoPlayer ->
             exoPlayer.volume = 0f // 静音预加载
@@ -1226,11 +1459,11 @@ class LivePlayActivity : AppCompatActivity() {
     
     private fun performSwitch() {
         runOnUiThread {
-            if (helperPlayer == null || player == null) return@runOnUiThread
+            if (helperPlayer == null) return@runOnUiThread
             
             Log.d(TAG, "执行无缝切换...")
             val newPlayer = helperPlayer!!
-            val oldPlayer = player!!
+            val oldPlayer = player
             
             // 1. 绑定新播放器到View
             playerView.player = newPlayer
@@ -1242,12 +1475,15 @@ class LivePlayActivity : AppCompatActivity() {
             setupPlayerListener(newPlayer)
             
             // 4. 释放旧播放器
-            oldPlayer.stop()
-            oldPlayer.release()
+            oldPlayer?.stop()
+            oldPlayer?.release()
             
             // 5. 更新引用
             player = newPlayer
             helperPlayer = null
+            
+            hasFirstFrameShown = true
+            loadingProgress.visibility = View.GONE
             
             // 6. 重启定时器
             startRefreshTimer()
@@ -1268,6 +1504,12 @@ class LivePlayActivity : AppCompatActivity() {
         
         helperPlayer?.release()
         helperPlayer = null
+        
+        fastPlayer?.release()
+        fastPlayer = null
+        
+        targetPlayer?.release()
+        targetPlayer = null
         
         // playerView.player = null // 可能会导致NPE如果在onCreate前调用? 不会，这是onDestroy. 
         // 实际上playerView可能已经被销毁了，但如果它是lateinit var... 
