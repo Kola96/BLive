@@ -4,7 +4,9 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ObjectAnimator
 import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.util.AttributeSet
 import android.util.Log
 import android.util.TypedValue
@@ -13,6 +15,7 @@ import android.view.ViewGroup
 import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.TextView
+import androidx.appcompat.widget.AppCompatTextView
 import java.util.LinkedList
 import java.util.Queue
 import kotlin.random.Random
@@ -93,7 +96,7 @@ class SimpleDanmuView @JvmOverloads constructor(
         }
 
         // 创建弹幕 View
-        val textView = TextView(context).apply {
+        val textView = StrokedTextView(context).apply {
             text = item.text
             // 解析颜色，通过Alpha通道控制透明度
             val alpha = (danmuAlpha * 255).toInt().coerceIn(0, 255)
@@ -101,11 +104,7 @@ class SimpleDanmuView @JvmOverloads constructor(
             val textColor = (alpha.toLong() shl 24 or rgb).toInt()
             Log.d(TAG, "textColor: $textColor")
             setTextColor(textColor)
-            
-            // 移除阴影以提升显示效果
-            // setShadowLayer(3f, 1f, 1f, shadowColor)
-            // setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-            
+
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f * danmuSizeScale) // 基础字号 20sp
             // alpha = danmuAlpha // 不再使用 View.alpha 控制透明度
             maxLines = 1
@@ -217,6 +216,40 @@ class SimpleDanmuView @JvmOverloads constructor(
         removeAllViews()
         for (i in tracks.indices) {
             tracks[i] = 0L
+        }
+    }
+
+    inner class StrokedTextView(context: Context) : AppCompatTextView(context) {
+        private var isDrawing = false
+
+        override fun invalidate() {
+            if (isDrawing) return
+            super.invalidate()
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            if (isDrawing) {
+                super.onDraw(canvas)
+                return
+            }
+            
+            val originalColors = textColors
+            
+            isDrawing = true
+            
+            // 绘制描边
+            paint.style = Paint.Style.STROKE
+            // 描边宽度跟随字号缩放
+            paint.strokeWidth = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 1f * danmuSizeScale, resources.displayMetrics)
+            setTextColor(Color.BLACK)
+            super.onDraw(canvas)
+            
+            // 绘制填充
+            paint.style = Paint.Style.FILL
+            setTextColor(originalColors)
+            super.onDraw(canvas)
+            
+            isDrawing = false
         }
     }
 }
