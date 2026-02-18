@@ -13,16 +13,19 @@
 
     <TextView
         android:id="@+id/category_name"
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
         android:textColor="#FFFFFF"
         android:textSize="18sp" />
 
     <TextView
         android:id="@+id/category_value"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:gravity="end"
+        android:ellipsize="end"
+        android:maxLines="1"
         android:textColor="#FF4081"
         android:textSize="16sp" />
 
