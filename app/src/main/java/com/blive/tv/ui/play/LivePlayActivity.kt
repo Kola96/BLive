@@ -38,6 +38,11 @@ class LivePlayActivity : AppCompatActivity() {
     private lateinit var simpleDanmuView: SimpleDanmuView
     
     private var player: ExoPlayer? = null
+    private var helperPlayer: ExoPlayer? = null
+    private var refreshTimer: android.os.CountDownTimer? = null
+    // 90 minutes in milliseconds
+    private val REFRESH_INTERVAL = 90 * 60 * 1000L
+
     private var currentRoomId: Long = -1L
     private var playUrlList: List<String> = emptyList()
     private var currentUrlIndex: Int = 0
@@ -113,6 +118,7 @@ class LivePlayActivity : AppCompatActivity() {
         if (currentRoomId == -1L) {
             Log.e(TAG, "直播间ID无效")
             showError("直播间ID无效")
+            finish()
             return
         }
 
@@ -477,6 +483,10 @@ class LivePlayActivity : AppCompatActivity() {
     }
     
     private fun rebuildAndPlayUrl() {
+        // 取消可能正在进行的无缝刷新
+        helperPlayer?.release()
+        helperPlayer = null
+        
         val url = buildPlayUrlWithSelection()
         if (url.isNotEmpty()) {
             Log.d(TAG, "重新构建播放URL: $url")
@@ -808,57 +818,64 @@ class LivePlayActivity : AppCompatActivity() {
 
             Log.d(TAG, "播放器准备完成，开始播放")
 
-            exoPlayer.addListener(object : Player.Listener {
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    when (playbackState) {
-                        Player.STATE_IDLE -> {
-                            Log.d(TAG, "播放状态: IDLE")
-                            val error = exoPlayer.playerError
-                            if (error != null) {
-                                Log.e(TAG, "播放失败，错误类型: ${error.javaClass.simpleName}")
-                                Log.e(TAG, "错误消息: ${error.message}")
-                                Log.e(TAG, "错误详情: ${error.errorCodeName}")
-                                Log.e(TAG, "错误堆栈", error)
-                                tryNextUrl(error)
-                            }
-                        }
-                        Player.STATE_BUFFERING -> {
-                            Log.d(TAG, "播放状态: BUFFERING (缓冲中)")
-                        }
-                        Player.STATE_READY -> {
-                            Log.d(TAG, "播放状态: READY (准备就绪)")
-                            loadingProgress.visibility = View.GONE
-                            // 真实弹幕已通过WebSocket接入，不再需要测试弹幕
-                            
-                            // 确保SimpleDanmuView可见
-                            simpleDanmuView.visibility = View.VISIBLE
-                        }
-                        Player.STATE_ENDED -> {
-                            Log.d(TAG, "播放状态: ENDED (播放结束)")
+            setupPlayerListener(exoPlayer)
+        }
+    }
+    
+    private fun setupPlayerListener(exoPlayer: ExoPlayer) {
+        exoPlayer.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                when (playbackState) {
+                    Player.STATE_IDLE -> {
+                        Log.d(TAG, "播放状态: IDLE")
+                        val error = exoPlayer.playerError
+                        if (error != null) {
+                            Log.e(TAG, "播放失败，错误类型: ${error.javaClass.simpleName}")
+                            Log.e(TAG, "错误消息: ${error.message}")
+                            Log.e(TAG, "错误详情: ${error.errorCodeName}")
+                            Log.e(TAG, "错误堆栈", error)
+                            tryNextUrl(error)
                         }
                     }
+                    Player.STATE_BUFFERING -> {
+                        Log.d(TAG, "播放状态: BUFFERING (缓冲中)")
+                    }
+                    Player.STATE_READY -> {
+                        Log.d(TAG, "播放状态: READY (准备就绪)")
+                        loadingProgress.visibility = View.GONE
+                        // 真实弹幕已通过WebSocket接入，不再需要测试弹幕
+                        
+                        // 确保SimpleDanmuView可见
+                        simpleDanmuView.visibility = View.VISIBLE
+                        
+                        // 启动刷新定时器
+                        startRefreshTimer()
+                    }
+                    Player.STATE_ENDED -> {
+                        Log.d(TAG, "播放状态: ENDED (播放结束)")
+                    }
                 }
+            }
 
-                override fun onPlayerError(error: PlaybackException) {
-                    Log.e(TAG, "播放器错误: ${error.javaClass.simpleName}")
-                    Log.e(TAG, "错误消息: ${error.message}")
-                    Log.e(TAG, "错误代码: ${error.errorCode}")
-                    Log.e(TAG, "错误代码名称: ${error.errorCodeName}")
-                    Log.e(TAG, "是否可恢复: ${error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED}")
-                    Log.e(TAG, "错误堆栈", error)
-                    
-                    tryNextUrl(error)
-                }
+            override fun onPlayerError(error: PlaybackException) {
+                Log.e(TAG, "播放器错误: ${error.javaClass.simpleName}")
+                Log.e(TAG, "错误消息: ${error.message}")
+                Log.e(TAG, "错误代码: ${error.errorCode}")
+                Log.e(TAG, "错误代码名称: ${error.errorCodeName}")
+                Log.e(TAG, "是否可恢复: ${error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED}")
+                Log.e(TAG, "错误堆栈", error)
+                
+                tryNextUrl(error)
+            }
 
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    Log.d(TAG, "播放状态变化: $isPlaying")
-                }
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                Log.d(TAG, "播放状态变化: $isPlaying")
+            }
 
-                override fun onVideoSizeChanged(videoSize: com.google.android.exoplayer2.video.VideoSize) {
-                    Log.d(TAG, "视频尺寸: ${videoSize.width}x${videoSize.height}")
-                }
-            })
-        }
+            override fun onVideoSizeChanged(videoSize: com.google.android.exoplayer2.video.VideoSize) {
+                Log.d(TAG, "视频尺寸: ${videoSize.width}x${videoSize.height}")
+            }
+        })
     }
     
     private fun tryNextUrl(error: PlaybackException) {
@@ -872,7 +889,9 @@ class LivePlayActivity : AppCompatActivity() {
             
             val delay = 500L
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                initializePlayer(playUrlList[currentUrlIndex])
+                if (!isFinishing && !isDestroyed) {
+                    initializePlayer(playUrlList[currentUrlIndex])
+                }
             }, delay)
         } else {
             Log.e(TAG, "所有URL都尝试过了，播放失败")
@@ -1099,14 +1118,172 @@ class LivePlayActivity : AppCompatActivity() {
         }
     }
     
+    // --- 直播流自动刷新与无缝切换逻辑 ---
+
+    private fun startRefreshTimer() {
+        cancelRefreshTimer()
+        Log.d(TAG, "启动直播流刷新定时器: ${REFRESH_INTERVAL / 60000}分钟")
+        
+        refreshTimer = object : android.os.CountDownTimer(REFRESH_INTERVAL, 60000) {
+            override fun onTick(millisUntilFinished: Long) {
+            }
+
+            override fun onFinish() {
+                Log.d(TAG, "定时器结束，开始刷新直播流")
+                startSeamlessRefresh()
+            }
+        }.start()
+    }
+
+    private fun cancelRefreshTimer() {
+        if (refreshTimer != null) {
+            Log.d(TAG, "取消直播流刷新定时器")
+            refreshTimer?.cancel()
+            refreshTimer = null
+        }
+    }
+
+    private fun startSeamlessRefresh() {
+        Log.d(TAG, "开始无缝刷新流程...")
+        fetchRoomPlayInfoForRefresh(currentRoomId)
+    }
+
+    private fun fetchRoomPlayInfoForRefresh(roomId: Long) {
+        val sessData = TokenManager.getSessData(this)
+        val cookie = if (sessData != null) "SESSDATA=$sessData" else ""
+        
+        RetrofitClient.liveApiService.getRoomPlayInfo(cookie, roomId).enqueue(
+            object : retrofit2.Callback<RoomPlayInfoResponse> {
+                override fun onResponse(call: retrofit2.Call<RoomPlayInfoResponse>, response: retrofit2.Response<RoomPlayInfoResponse>) {
+                    if (response.isSuccessful && response.body()?.code == 0) {
+                        val playInfoResponse = response.body()!!
+                        val data = playInfoResponse.data
+                        if (data != null) {
+                             var url = findStreamUrl(data, "http_stream", "flv", selectedCodec, selectedQn, selectedCdnHost)
+                             if (url.isEmpty()) {
+                                 url = findStreamUrl(data, "http_stream", "ts", selectedCodec, selectedQn, selectedCdnHost)
+                             }
+                             
+                             if (url.isNotEmpty()) {
+                                 prepareHelperPlayer(url)
+                             } else {
+                                 Log.e(TAG, "刷新失败：找不到匹配当前设置的流地址")
+                                 scheduleRetry()
+                             }
+                        }
+                    } else {
+                        Log.e(TAG, "刷新失败：API请求错误")
+                        scheduleRetry()
+                    }
+                }
+                
+                override fun onFailure(call: retrofit2.Call<RoomPlayInfoResponse>, t: Throwable) {
+                    Log.e(TAG, "刷新失败：网络错误", t)
+                    scheduleRetry()
+                }
+            }
+        )
+    }
+    
+    private fun scheduleRetry() {
+        Log.d(TAG, "计划5分钟后重试刷新")
+        refreshTimer = object : android.os.CountDownTimer(5 * 60 * 1000L, 60000) {
+            override fun onTick(m: Long) {}
+            override fun onFinish() { startSeamlessRefresh() }
+        }.start()
+    }
+    
+    private fun prepareHelperPlayer(url: String) {
+        Log.d(TAG, "准备辅助播放器，URL: $url")
+        // 确保先释放之前的（如果有）
+        helperPlayer?.release() 
+        
+        helperPlayer = ExoPlayer.Builder(this).build().also { exoPlayer ->
+            exoPlayer.volume = 0f // 静音预加载
+            val mediaItem = MediaItem.fromUri(url)
+            exoPlayer.setMediaItem(mediaItem)
+            exoPlayer.prepare()
+            exoPlayer.playWhenReady = true // 开始缓冲
+            
+            exoPlayer.addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) {
+                        Log.d(TAG, "辅助播放器准备就绪，执行切换")
+                        exoPlayer.removeListener(this)
+                        performSwitch()
+                    }
+                }
+                
+                override fun onPlayerError(error: PlaybackException) {
+                    Log.e(TAG, "辅助播放器出错", error)
+                    helperPlayer?.release()
+                    helperPlayer = null
+                    scheduleRetry()
+                }
+            })
+        }
+    }
+    
+    private fun performSwitch() {
+        runOnUiThread {
+            if (helperPlayer == null || player == null) return@runOnUiThread
+            
+            Log.d(TAG, "执行无缝切换...")
+            val newPlayer = helperPlayer!!
+            val oldPlayer = player!!
+            
+            // 1. 绑定新播放器到View
+            playerView.player = newPlayer
+            
+            // 2. 新播放器开启声音
+            newPlayer.volume = 1.0f
+            
+            // 3. 为新播放器设置标准监听器
+            setupPlayerListener(newPlayer)
+            
+            // 4. 释放旧播放器
+            oldPlayer.stop()
+            oldPlayer.release()
+            
+            // 5. 更新引用
+            player = newPlayer
+            helperPlayer = null
+            
+            // 6. 重启定时器
+            startRefreshTimer()
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        releaseAllResources()
+    }
+
+    private fun releaseAllResources() {
+        Log.d(TAG, "释放所有资源")
+        cancelRefreshTimer()
+        
         player?.release()
         player = null
+        
+        helperPlayer?.release()
+        helperPlayer = null
+        
+        // playerView.player = null // 可能会导致NPE如果在onCreate前调用? 不会，这是onDestroy. 
+        // 实际上playerView可能已经被销毁了，但如果它是lateinit var... 
+        // 在onDestroy中可以安全地置空。但要注意如果在View销毁后访问。
+        if (::playerView.isInitialized) {
+            playerView.player = null
+        }
+        
         // 释放弹幕资源
-        simpleDanmuView.clear()
+        if (::simpleDanmuView.isInitialized) {
+            simpleDanmuView.clear()
+        }
         // 停止弹幕TCP客户端
-        danmuTcpClient.stop()
+        if (::danmuTcpClient.isInitialized) {
+            danmuTcpClient.stop()
+        }
     }
 
     override fun onPause() {
