@@ -247,21 +247,33 @@ class MainActivity : AppCompatActivity() {
         // 设置焦点导航，确保可以从GridView切换到用户头像
         gridView.nextFocusUpId = R.id.user_avatar_container
         
-        // 延迟设置焦点到第一个项目，确保数据已加载完成
+        // 延迟设置焦点，确保数据已加载完成
         gridView.postDelayed({
             if (liveRooms.isNotEmpty()) {
-                // 设置第一个项目获得焦点
-                val firstItem = gridView.getChildAt(0)
-                if (firstItem != null) {
-                    firstItem.requestFocus()
-                } else {
-                    // 如果直接获取子项失败，尝试通过滚动到位置0并请求焦点
-                    gridView.scrollToPosition(0)
-                    gridView.postDelayed({
-                        val firstItemAfterScroll = gridView.getChildAt(0)
-                        firstItemAfterScroll?.requestFocus()
-                    }, 100)
+                var targetPosition = 0
+                
+                // 尝试恢复上次点击的焦点
+                if (lastClickedRoomId != -1L) {
+                    val index = liveRooms.indexOfFirst { it.roomId == lastClickedRoomId }
+                    if (index != -1) {
+                        targetPosition = index
+                    } else {
+                        // 如果原来的房间找不到了，默认聚焦到第一个
+                        targetPosition = 0
+                    }
                 }
+                
+                // 执行聚焦逻辑
+                // Leanback的VerticalGridView使用setSelectedPosition可以同时滚动并设置焦点
+                gridView.setSelectedPosition(targetPosition)
+                
+                // 为了双重保险，延时请求一次焦点
+                gridView.postDelayed({
+                    val holder = gridView.findViewHolderForAdapterPosition(targetPosition)
+                    if (holder != null) {
+                        holder.itemView.requestFocus()
+                    }
+                }, 100)
             }
         }, 200)
     }
@@ -356,6 +368,9 @@ class MainActivity : AppCompatActivity() {
             false
         }
     }
+
+    // 记录最后点击的直播间ID
+    private var lastClickedRoomId: Long = -1L
 
     // 显示用户菜单
     private fun showUserMenu(anchorView: android.view.View) {
@@ -488,6 +503,10 @@ class MainActivity : AppCompatActivity() {
                     val pos = bindingAdapterPosition
                     if (pos != androidx.recyclerview.widget.RecyclerView.NO_POSITION && pos >= 0 && pos < liveRooms.size) {
                         val liveRoom = liveRooms[pos]
+                        
+                        // 记录点击的直播间ID
+                        lastClickedRoomId = liveRoom.roomId
+                        
                         val intent = android.content.Intent(itemView.context, com.blive.tv.ui.play.LivePlayActivity::class.java)
                         intent.putExtra("room_id", liveRoom.roomId)
                         itemView.context.startActivity(intent)
