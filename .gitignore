@@ -9,6 +9,7 @@
 .cxx
 local.properties
 .trae/
+.qoder/
 gradle-8.5/
 app/build/
-app/blive.jks
+app/*.jks

@@ -28,46 +28,10 @@ BLive 是一个专为 Android TV 设计的哔哩哔哩（Bilibili）直播客户
 *   **二维码**：[ZXing](https://github.com/zxing/zxing)
 *   **弹幕通信**：自定义 TCP/WebSocket 客户端
 
-## 🚀 快速开始
+## 📚 开发文档
 
-### 环境要求
-
-*   Android Studio Iguana 或更高版本
-*   JDK 17
-*   Android SDK API 34 (Min SDK 21)
-
-### 构建步骤
-
-1.  **克隆仓库**
-    ```bash
-    git clone https://github.com/your-username/BLive.git
-    cd BLive
-    ```
-
-2.  **打开项目**
-    启动 Android Studio，选择 `Open` 并指向 `BLive` 目录。
-
-3.  **同步依赖**
-    等待 Gradle Sync 完成，下载所需依赖库。
-
-4.  **运行项目**
-    *   连接 Android TV 设备或启动 Android TV 模拟器。
-    *   点击 Android Studio 顶部的 `Run` 按钮 (绿色播放图标)。
-
-### 安装说明
-
-如果您想直接安装 APK：
-
-1.  在项目根目录下执行：
-    ```bash
-    ./gradlew assembleDebug
-    ```
-2.  生成的 APK 文件位于 `app/build_new/outputs/apk/debug/app-debug.apk`。
-3.  通过 ADB 安装到电视：
-    ```bash
-    adb connect <电视IP地址>
-    adb install -r app/build_new/outputs/apk/debug/app-debug.apk
-    ```
+开发环境、构建运行、签名配置与 ADB 安装说明请查看：  
+[开发文档](docs/development.md)
 
 ## 🎮 操作指南
 

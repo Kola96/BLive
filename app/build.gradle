@@ -25,10 +25,20 @@ android {
 
     signingConfigs {
         release {
-            storeFile file('blive.jks')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
+            def localProperties = new Properties()
+            def localPropertiesFile = rootProject.file('local.properties')
+            if (localPropertiesFile.exists()) {
+                localPropertiesFile.withReader('UTF-8') { reader ->
+                    localProperties.load(reader)
+                }
+            }
+            
+            if (localProperties.containsKey('storeFile')) {
+                storeFile file(localProperties['storeFile'])
+                storePassword localProperties['storePassword']
+                keyAlias localProperties['keyAlias']
+                keyPassword localProperties['keyPassword']
+            }
         }
     }
 
