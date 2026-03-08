@@ -1,32 +1,62 @@
-# BLive - Android TV Bilibili Live Client
+# BLive - Bilibili Live Client for Android TV (B站直播电视客户端)
 
-BLive 是一个专为 Android TV 设计的哔哩哔哩（Bilibili）直播客户端，采用 Kotlin 编写。它旨在为电视用户提供流畅、纯净的大屏直播观看体验，支持遥控器操作、弹幕显示以及画质调节等功能。
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Kotlin](https://img.shields.io/badge/Language-Kotlin-orange.svg)](https://kotlinlang.org/)
+[![Platform](https://img.shields.io/badge/Platform-Android%20TV-green.svg)](https://developer.android.com/tv)
+[![API](https://img.shields.io/badge/API-21%2B-brightgreen.svg)](https://android-arsenal.com/api?level=21)
 
-*AI真是太好用了，你们知道吗？*
+**BLive** 是一款开源、无广告的 **第三方 Bilibili (B站) 直播客户端**，专为 **Android TV** 和 **电视盒子** 设计。
 
-## ✨ 主要功能
+它基于 Google 官方的 **Leanback** 架构开发，遵循 Material Design 设计规范，为您提供流畅、纯净的大屏直播观看体验。支持 **4K/1080P 高清画质**、**实时弹幕**、**扫码登录** 以及 **遥控器完美适配**。
 
-*   **大屏直播观看**：适配 Android TV，支持高清直播流播放。
-*   **实时弹幕**：内置弹幕引擎，支持实时显示直播间弹幕。
-*   **扫码登录**：支持 Bilibili 手机端扫码登录，同步用户信息。
-*   **遥控器适配**：全功能 D-pad 方向键支持，操作顺滑。
-*   **个性化设置**：
-    *   **画质切换**：支持多种清晰度选择。
-    *   **弹幕设置**：支持调节弹幕大小、不透明度、速度以及开关。
+---
 
-*Tips：目前仅支持观看关注列表中的直播间*
+## ✨ 核心功能 (Features)
 
-## 🛠 技术栈
+*   **📺 大屏沉浸体验**：专为 Android TV 适配的 UI 界面，支持遥控器焦点操作，流畅顺滑。
+*   **🎥 高清画质**：支持 **4K**、**1080P**、**60FPS** 等多种清晰度原画播放（取决于直播间源）。
+*   **💬 实时弹幕**：内置高性能弹幕引擎，支持弹幕大小、透明度、速度调节，支持屏蔽特定弹幕。
+*   **📱 扫码登录**：支持 Bilibili 手机端扫码登录，同步您的关注列表和用户信息。
+*   **⚡️ 硬解播放**：基于 **ExoPlayer**，支持 H.264/HEVC 硬件解码，低功耗更流畅。
+*   **🛠 个性化设置**：画质偏好、弹幕设置、解码方式等均可自定义。
 
-本项目基于现代 Android 开发技术栈构建：
+## 📸 界面预览 (Screenshots)
+
+### 扫码登录
+![扫码登录](docs/pics/扫码登录.png)
+
+### 关注列表
+![关注列表](docs/pics/关注列表.png)
+
+### 播放界面
+![播放界面](docs/pics/播放界面.png)
+
+### 更多设置
+![更多设置](docs/pics/更多设置.png)
+
+### 用户偏好设置
+![用户偏好设置](docs/pics/用户偏好设置.png)
+
+## 📥 下载与安装 (Download)
+
+请前往 [Releases 页面](../../releases) 下载最新版本的 APK 安装包。
+
+1.  下载 `BLive-vX.X.X.apk` 到 U 盘。
+2.  将 U 盘插入 Android TV 或电视盒子。
+3.  通过文件管理器安装即可。
+
+## 🛠 技术栈 (Tech Stack)
+
+本项目采用现代 Android 开发技术栈构建：
 
 *   **语言**：[Kotlin](https://kotlinlang.org/)
-*   **UI 框架**：Android View System (XML) + [Android Leanback Library](https://developer.android.com/jetpack/androidx/releases/leanback) (TV UI 适配)
+*   **架构**：MVVM
+*   **UI 框架**：[Android Leanback](https://developer.android.com/jetpack/androidx/releases/leanback) (TV UI)
 *   **网络请求**：[Retrofit](https://square.github.io/retrofit/) + [OkHttp](https://square.github.io/okhttp/)
-*   **视频播放**：[ExoPlayer](https://github.com/google/ExoPlayer)
+*   **视频播放**：[ExoPlayer](https://github.com/google/ExoPlayer) (Media3)
 *   **图片加载**：[Glide](https://github.com/bumptech/glide)
+*   **弹幕引擎**：自定义 TCP/WebSocket 协议实现
 *   **二维码**：[ZXing](https://github.com/zxing/zxing)
-*   **弹幕通信**：自定义 TCP/WebSocket 客户端
 
 ## 📚 开发文档
 
@@ -37,14 +67,20 @@ BLive 是一个专为 Android TV 设计的哔哩哔哩（Bilibili）直播客户
 
 *   **下方向键/菜单键 (播放页)**：呼出设置菜单。
 
-## ⚠️ 免责声明
+## 🤝 贡献 (Contributing)
+
+欢迎提交 Issue 和 Pull Request！
+
+*   如果您发现了 Bug 或有新功能建议，请提交 [Issue](../../issues)。
+
+## ⚠️ 免责声明 (Disclaimer)
 
 1.  本项目仅供个人学习、研究和交流使用，请于下载后 24 小时内删除。
-2.  本项目完全免费，严禁用于任何商业用途或非法盈利。
+2.  本项目完全免费，**严禁用于任何商业用途或非法盈利**。
 3.  本项目所使用的 API 接口均来源于 Bilibili 官方，其知识产权归 Bilibili 所有。本项目不保证 API 的稳定性、安全性及可用性。
 4.  使用本项目所产生的任何后果由使用者自行承担，开发者不承担任何法律责任。
 5.  如果本项目侵犯了您的权益，请联系开发者删除。
 
-## 📄 许可证
+## 📄 许可证 (License)
 
-[MIT License](LICENSE)
+本项目基于 [MIT License](LICENSE) 开源。
