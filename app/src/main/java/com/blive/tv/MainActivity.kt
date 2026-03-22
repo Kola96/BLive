@@ -4,12 +4,12 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.blive.tv.data.model.LiveUserItem
 import com.blive.tv.data.model.UserInfoResponse
 import com.blive.tv.network.RetrofitClient
 import com.blive.tv.ui.login.LoginActivity
+import com.blive.tv.utils.ToastHelper
 import com.blive.tv.utils.TokenManager
 
 // 直播间数据模型
@@ -46,6 +46,8 @@ class MainActivity : AppCompatActivity() {
     private var lastFocusPositionFromGrid = 0
     private var liveListState = LiveListState.Loading
     private var isLoadingLiveList = false
+    private var lastBackPressedAt = 0L
+    private val backPressExitWindowMs = 3000L
 
     // 初始化Header
     private fun initHeader() {
@@ -169,12 +171,12 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             isLoadingLiveList = false
                             renderLiveListState(LiveListState.Error)
-                            Toast.makeText(this@MainActivity, "获取直播列表失败：${liveUsersResponse?.message}", Toast.LENGTH_SHORT).show()
+                            ToastHelper.showTextToast(this@MainActivity, "获取直播列表失败：${liveUsersResponse?.message}")
                         }
                     } else {
                         isLoadingLiveList = false
                         renderLiveListState(LiveListState.Error)
-                        Toast.makeText(this@MainActivity, "网络请求失败：${response.code()}", Toast.LENGTH_SHORT).show()
+                        ToastHelper.showTextToast(this@MainActivity, "网络请求失败：${response.code()}")
                     }
                 }
 
@@ -184,7 +186,7 @@ class MainActivity : AppCompatActivity() {
                 ) {
                     isLoadingLiveList = false
                     renderLiveListState(LiveListState.Error)
-                    Toast.makeText(this@MainActivity, "网络连接错误：${t.message}", Toast.LENGTH_SHORT).show()
+                    ToastHelper.showTextToast(this@MainActivity, "网络连接错误：${t.message}")
                 }
             }
         )
@@ -365,7 +367,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         if (isLoadingLiveList) {
-            Toast.makeText(this, "正在刷新直播间列表...", Toast.LENGTH_SHORT).show()
+            ToastHelper.showTextToast(this, "正在刷新直播间列表...")
             return
         }
         fetchLiveUsers()
@@ -470,7 +472,7 @@ class MainActivity : AppCompatActivity() {
         // 更新UI
         updateUIAccordingToLoginState()
         // 显示退出成功提示
-        Toast.makeText(this, "退出登录成功", Toast.LENGTH_SHORT).show()
+        ToastHelper.showTextToast(this, "退出登录成功")
     }
 
 
@@ -488,8 +490,16 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
         }
-        
-        
+        if (keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+            val now = System.currentTimeMillis()
+            if (now - lastBackPressedAt <= backPressExitWindowMs) {
+                finishAffinity()
+                return true
+            }
+            lastBackPressedAt = now
+            ToastHelper.showTextToast(this, "再按一次返回键退出应用")
+            return true
+        }
         return super.onKeyDown(keyCode, event)
     }
     

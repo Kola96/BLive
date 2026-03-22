@@ -9,7 +9,6 @@ import android.view.KeyEvent
 import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -24,6 +23,7 @@ import com.blive.tv.danmu.DanmuMessage
 import com.blive.tv.danmu.DanmuTcpClient
 import com.blive.tv.danmu.SimpleDanmuView
 import com.blive.tv.network.RetrofitClient
+import com.blive.tv.utils.ToastHelper
 import com.blive.tv.utils.TokenManager
 import com.blive.tv.utils.UserPreferencesManager
 
@@ -73,6 +73,8 @@ class LivePlayActivity : AppCompatActivity() {
     
     private var isSettingsVisible: Boolean = false
     private var currentExpandedCategory: String? = null
+    private var lastBackPressedAt: Long = 0L
+    private val backPressExitWindowMs: Long = 3000L
     
     private lateinit var playSettingsAdapter: PlaySettingsCategoryAdapter
     private lateinit var danmuSettingsAdapter: PlaySettingsCategoryAdapter
@@ -497,7 +499,7 @@ class LivePlayActivity : AppCompatActivity() {
             Log.d(TAG, "手动切换: 开始无缝切换到 $url")
             prepareHelperPlayer(url)
         } else {
-            Toast.makeText(this, "该配置下没有可用的流", Toast.LENGTH_SHORT).show()
+            ToastHelper.showTextToast(this, "该配置下没有可用的流")
         }
     }
     
@@ -1143,7 +1145,7 @@ class LivePlayActivity : AppCompatActivity() {
         loadingProgress.visibility = View.GONE
         errorText.visibility = View.VISIBLE
         errorText.text = message
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        ToastHelper.showTextToast(this, message)
     }
     
     private fun toggleSettingsPanel() {
@@ -1221,6 +1223,14 @@ class LivePlayActivity : AppCompatActivity() {
                     toggleSettingsPanel()
                     return true
                 }
+                val now = System.currentTimeMillis()
+                if (now - lastBackPressedAt <= backPressExitWindowMs) {
+                    finish()
+                    return true
+                }
+                lastBackPressedAt = now
+                ToastHelper.showTextToast(this, "再按一次返回键退出直播间")
+                return true
             }
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 Log.d(TAG, "DPAD_DOWN key pressed")

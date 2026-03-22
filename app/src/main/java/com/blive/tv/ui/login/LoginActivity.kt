@@ -7,7 +7,6 @@ import android.os.CountDownTimer
 import android.util.Log
 import android.view.View
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.blive.tv.MainActivity
 import com.blive.tv.R
@@ -16,6 +15,7 @@ import com.blive.tv.data.model.PollLoginResponse
 import com.blive.tv.data.model.UserToken
 import com.blive.tv.network.RetrofitClient
 import com.blive.tv.network.SignGenerator
+import com.blive.tv.utils.ToastHelper
 import com.blive.tv.utils.TokenManager
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
@@ -98,21 +98,21 @@ class LoginActivity : AppCompatActivity() {
                                 startPollingLoginStatus()
                             } else {
                                 statusText.text = "获取二维码失败"
-                                Toast.makeText(this@LoginActivity, "获取二维码失败", Toast.LENGTH_SHORT).show()
+                                ToastHelper.showTextToast(this@LoginActivity, "获取二维码失败")
                             }
                         } else {
                             statusText.text = "获取二维码失败：${authCodeResponse?.message}"
-                            Toast.makeText(this@LoginActivity, "获取二维码失败：${authCodeResponse?.message}", Toast.LENGTH_SHORT).show()
+                            ToastHelper.showTextToast(this@LoginActivity, "获取二维码失败：${authCodeResponse?.message}")
                         }
                     } else {
                         statusText.text = "网络请求失败"
-                        Toast.makeText(this@LoginActivity, "网络请求失败", Toast.LENGTH_SHORT).show()
+                        ToastHelper.showTextToast(this@LoginActivity, "网络请求失败")
                     }
                 }
 
                 override fun onFailure(call: retrofit2.Call<AuthCodeResponse>, t: Throwable) {
                     statusText.text = "网络连接错误：${t.message}"
-                    Toast.makeText(this@LoginActivity, "网络连接错误：${t.message}", Toast.LENGTH_SHORT).show()
+                    ToastHelper.showTextToast(this@LoginActivity, "网络连接错误：${t.message}")
                     Log.e(TAG, "请求二维码失败", t)
                 }
             }
@@ -128,7 +128,7 @@ class LoginActivity : AppCompatActivity() {
         } catch (e: WriterException) {
             Log.e(TAG, "生成二维码失败", e)
             statusText.text = "生成二维码失败"
-            Toast.makeText(this, "生成二维码失败", Toast.LENGTH_SHORT).show()
+            ToastHelper.showTextToast(this, "生成二维码失败")
         }
     }
 
@@ -231,7 +231,7 @@ class LoginActivity : AppCompatActivity() {
                                 else -> {
                                     // 其他错误
                                     statusText.text = "登录失败：${pollResponse.message}"
-                                    Toast.makeText(this@LoginActivity, "登录失败：${pollResponse.message}", Toast.LENGTH_SHORT).show()
+                                    ToastHelper.showTextToast(this@LoginActivity, "登录失败：${pollResponse.message}")
                                 }
                             }
                         }
@@ -272,7 +272,7 @@ class LoginActivity : AppCompatActivity() {
 
             // 显示登录成功
             statusText.text = "登录成功！"
-            Toast.makeText(this, "登录成功！", Toast.LENGTH_SHORT).show()
+            ToastHelper.showTextToast(this, "登录成功！")
 
             // 取消计时器和轮询
             countDownTimer?.cancel()
