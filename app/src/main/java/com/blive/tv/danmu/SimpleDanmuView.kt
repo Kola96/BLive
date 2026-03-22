@@ -30,8 +30,8 @@ class SimpleDanmuView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
-    private val trackCount = 10 // 默认10个轨道
-    private val tracks = LongArray(trackCount) { 0L } // 轨道可用时间戳，0表示空闲
+    private var currentTrackCount = DEFAULT_TRACK_COUNT
+    private var tracks = LongArray(DEFAULT_TRACK_COUNT) { 0L }
     private val danmuQueue: Queue<DanmuItem> = LinkedList()
     
     // 配置参数
@@ -54,6 +54,7 @@ class SimpleDanmuView @JvmOverloads constructor(
                     view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f * value)
                 }
             }
+            ensureTracksReady(forceRebuild = true)
         }
     var danmuAlpha = 1.0f     // 透明度
         set(value) {
@@ -65,6 +66,11 @@ class SimpleDanmuView @JvmOverloads constructor(
 
     companion object {
         private const val TAG = "SimpleDanmuView"
+        private const val DEFAULT_TRACK_COUNT = 10
+        private const val MIN_TRACK_COUNT = 4
+        private const val MAX_TRACK_COUNT = 30
+        private const val BASE_TEXT_SP = 20f
+        private const val TRACK_HEIGHT_RATIO = 1.6f
     }
 
     init {
@@ -88,6 +94,8 @@ class SimpleDanmuView @JvmOverloads constructor(
     }
 
     private fun createAndShowDanmu(item: DanmuItem) {
+        ensureTracksReady()
+
         // 寻找可用轨道
         val trackIndex = findAvailableTrack()
         if (trackIndex == -1) {
@@ -105,7 +113,7 @@ class SimpleDanmuView @JvmOverloads constructor(
             Log.d(TAG, "textColor: $textColor")
             setTextColor(textColor)
 
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f * danmuSizeScale) // 基础字号 20sp
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, BASE_TEXT_SP * danmuSizeScale) // 基础字号 20sp
             // alpha = danmuAlpha // 不再使用 View.alpha 控制透明度
             maxLines = 1
             includeFontPadding = false
@@ -122,7 +130,7 @@ class SimpleDanmuView @JvmOverloads constructor(
         val viewHeight = textView.measuredHeight
 
         // 计算轨道高度
-        val trackHeight = height / trackCount
+        val trackHeight = (height / currentTrackCount).coerceAtLeast(1)
         val topMargin = trackIndex * trackHeight + (trackHeight - viewHeight) / 2
 
         // 设置初始位置（屏幕右侧外）
@@ -154,6 +162,44 @@ class SimpleDanmuView @JvmOverloads constructor(
         textView.tag = animator
 
         animator.start()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (h != oldh) {
+            ensureTracksReady(forceRebuild = true)
+        }
+    }
+
+    private fun ensureTracksReady(forceRebuild: Boolean = false) {
+        val newTrackCount = calculateTrackCount(height)
+        if (forceRebuild || newTrackCount != currentTrackCount || tracks.size != newTrackCount) {
+            rebuildTracks(newTrackCount)
+        }
+    }
+
+    private fun calculateTrackCount(viewHeight: Int): Int {
+        if (viewHeight <= 0) return DEFAULT_TRACK_COUNT
+        val textSizePx = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_SP,
+            BASE_TEXT_SP * danmuSizeScale,
+            resources.displayMetrics
+        )
+        val targetTrackHeight = (textSizePx * TRACK_HEIGHT_RATIO).toInt().coerceAtLeast(1)
+        val estimatedTrackCount = (viewHeight / targetTrackHeight).coerceAtLeast(1)
+        return estimatedTrackCount.coerceIn(MIN_TRACK_COUNT, MAX_TRACK_COUNT)
+    }
+
+    private fun rebuildTracks(newTrackCount: Int) {
+        val normalizedTrackCount = newTrackCount.coerceIn(MIN_TRACK_COUNT, MAX_TRACK_COUNT)
+        val oldTracks = tracks
+        val newTracks = LongArray(normalizedTrackCount) { 0L }
+        val copyCount = minOf(oldTracks.size, newTracks.size)
+        for (i in 0 until copyCount) {
+            newTracks[i] = oldTracks[i]
+        }
+        tracks = newTracks
+        currentTrackCount = normalizedTrackCount
     }
 
     private fun updateRunningDanmuSpeed() {
@@ -201,7 +247,7 @@ class SimpleDanmuView @JvmOverloads constructor(
 
     private fun findAvailableTrack(): Int {
         val now = System.currentTimeMillis()
-        for (i in 0 until trackCount) {
+        for (i in tracks.indices) {
             if (now >= tracks[i]) {
                 return i
             }
