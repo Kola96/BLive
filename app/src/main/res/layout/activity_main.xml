@@ -111,6 +111,93 @@
         android:overScrollMode="never"
         android:nextFocusUp="@+id/user_avatar_container" />
 
+    <LinearLayout
+        android:id="@+id/live_list_loading_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/header_container"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:focusable="false"
+        android:focusableInTouchMode="false">
+
+        <ProgressBar
+            android:id="@+id/live_list_loading_progress"
+            style="?android:attr/progressBarStyleLarge"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:indeterminate="true" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/live_list_empty_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/header_container"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:focusable="false"
+        android:focusableInTouchMode="false">
+
+        <TextView
+            android:id="@+id/live_list_empty_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="当前没有正在直播的直播间"
+            android:textColor="@android:color/white"
+            android:textSize="24sp"
+            android:layout_marginBottom="24dp" />
+
+        <ImageButton
+            android:id="@+id/live_list_empty_refresh_button"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:background="@drawable/state_refresh_button_background"
+            android:src="@drawable/ic_refresh"
+            android:scaleType="center"
+            android:tint="#E0E0E0"
+            android:contentDescription="刷新"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusUp="@+id/user_avatar_container" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/live_list_error_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/header_container"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:focusable="false"
+        android:focusableInTouchMode="false">
+
+        <TextView
+            android:id="@+id/live_list_error_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="加载失败, 请检查你的网络状况"
+            android:textColor="@android:color/white"
+            android:textSize="24sp"
+            android:layout_marginBottom="24dp" />
+
+        <ImageButton
+            android:id="@+id/live_list_error_refresh_button"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:background="@drawable/state_refresh_button_background"
+            android:src="@drawable/ic_refresh"
+            android:scaleType="center"
+            android:tint="#E0E0E0"
+            android:contentDescription="刷新"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusUp="@+id/user_avatar_container" />
+    </LinearLayout>
+
     <!-- 未登录时显示的中央登录按钮 -->
     <LinearLayout
         android:id="@+id/login_button_container"

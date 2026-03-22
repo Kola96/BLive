@@ -23,72 +23,44 @@ data class LiveRoom(
     val areaName: String
 )
 
+enum class LiveListState {
+    Loading,
+    Content,
+    Empty,
+    Error
+}
+
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 初始化UI组件
         initHeader()
         initGridView()
-        updateUIAccordingToLoginState()
-
-        // 设置登录按钮点击事件
         setupLoginButton()
-
-        // 设置用户头像点击事件
         setupUserAvatarClick()
+        setupStateRefreshButtons()
+        updateUIAccordingToLoginState()
     }
 
     private var lastFocusPositionFromGrid = 0
+    private var liveListState = LiveListState.Loading
+    private var isLoadingLiveList = false
 
     // 初始化Header
     private fun initHeader() {
         // Header已经在布局中定义，这里可以添加额外的初始化逻辑
     }
 
-    // 初始化GridView
     private fun initGridView() {
-        // 初始化VerticalGridView
         val gridView = findViewById<androidx.leanback.widget.VerticalGridView>(R.id.main_grid)
-        
-        // 生成模拟数据
-        val mockData = generateMockData()
-        
-        // 创建RecyclerView适配器
-        val adapter = LiveRoomAdapter(mockData, gridView)
-        
-        // 设置适配器到GridView
+        val adapter = LiveRoomAdapter(emptyList(), gridView)
         gridView.adapter = adapter
-        
-        // 设置列数为4
         gridView.setNumColumns(4)
-        
-        // 禁用过度滚动
         gridView.overScrollMode = View.OVER_SCROLL_NEVER
         gridView.setScrollEnabled(true)
-        
-        // 启用焦点管理
         gridView.setFocusable(true)
         gridView.setFocusableInTouchMode(true)
-        
-        // 延迟设置焦点到第一个项目，确保视图已初始化完成
-        gridView.postDelayed({
-            if (mockData.isNotEmpty()) {
-                // 设置第一个项目获得焦点
-                val firstItem = gridView.getChildAt(0)
-                if (firstItem != null) {
-                    firstItem.requestFocus()
-                } else {
-                    // 如果直接获取子项失败，尝试通过滚动到位置0并请求焦点
-                    gridView.scrollToPosition(0)
-                    gridView.postDelayed({
-                        val firstItemAfterScroll = gridView.getChildAt(0)
-                        firstItemAfterScroll?.requestFocus()
-                    }, 100)
-                }
-            }
-        }, 200)
     }
 
     // 获取用户信息
@@ -142,13 +114,17 @@ class MainActivity : AppCompatActivity() {
     
     // 获取用户关注的直播间列表（递归分页获取）
     private fun fetchLiveUsers() {
+        if (isLoadingLiveList) {
+            return
+        }
         val sessData = TokenManager.getSessData(this)
         if (sessData != null) {
-            // 构建Cookie头
             val cookie = "SESSDATA=$sessData"
-            
-            // 从第一页开始获取
+            isLoadingLiveList = true
+            renderLiveListState(LiveListState.Loading)
             fetchLiveUsersPage(cookie, 1, mutableListOf())
+        } else {
+            renderLiveListState(LiveListState.Error)
         }
     }
 
@@ -191,9 +167,13 @@ class MainActivity : AppCompatActivity() {
                                 handleLiveUsersData(accumulatedRooms)
                             }
                         } else {
+                            isLoadingLiveList = false
+                            renderLiveListState(LiveListState.Error)
                             Toast.makeText(this@MainActivity, "获取直播列表失败：${liveUsersResponse?.message}", Toast.LENGTH_SHORT).show()
                         }
                     } else {
+                        isLoadingLiveList = false
+                        renderLiveListState(LiveListState.Error)
                         Toast.makeText(this@MainActivity, "网络请求失败：${response.code()}", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -202,6 +182,8 @@ class MainActivity : AppCompatActivity() {
                     call: retrofit2.Call<com.blive.tv.data.model.LiveUsersResponse>,
                     t: Throwable
                 ) {
+                    isLoadingLiveList = false
+                    renderLiveListState(LiveListState.Error)
                     Toast.makeText(this@MainActivity, "网络连接错误：${t.message}", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -210,24 +192,24 @@ class MainActivity : AppCompatActivity() {
 
     // 处理获取到的直播间数据
     private fun handleLiveUsersData(liveUsers: List<LiveUserItem>) {
+        isLoadingLiveList = false
         if (liveUsers.isNotEmpty()) {
-            // 将LiveUserItem转换为LiveRoom对象
             val liveRooms = liveUsers.mapIndexed { index, item ->
                 LiveRoom(
                     id = index + 1,
-                    roomId = item.roomId,
-                    coverUrl = item.roomCover, // 使用直播间封面
+                    roomId = item.roomId, 
+                    coverUrl = item.roomCover,
                     anchorName = item.uname,
-                    anchorAvatar = item.face, // 主播头像
-                    roomTitle = item.title, // 直播间标题
-                    areaName = item.areaNameV2 // 直播间分区
+                    anchorAvatar = item.face,
+                    roomTitle = item.title,
+                    areaName = item.areaNameV2
                 )
             }
-            
-            // 更新GridView数据
             updateGridViewData(liveRooms)
+            renderLiveListState(LiveListState.Content)
         } else {
-            Toast.makeText(this, "暂无关注的直播", Toast.LENGTH_SHORT).show()
+            updateGridViewData(emptyList())
+            renderLiveListState(LiveListState.Empty)
         }
     }
 
@@ -283,25 +265,26 @@ class MainActivity : AppCompatActivity() {
         val userInfoContainer = findViewById<android.widget.LinearLayout>(R.id.user_info_container)
         val loginButtonContainer = findViewById<android.widget.LinearLayout>(R.id.login_button_container)
         val gridView = findViewById<androidx.leanback.widget.VerticalGridView>(R.id.main_grid)
+        val loadingContainer = findViewById<android.widget.LinearLayout>(R.id.live_list_loading_container)
+        val emptyContainer = findViewById<android.widget.LinearLayout>(R.id.live_list_empty_container)
+        val errorContainer = findViewById<android.widget.LinearLayout>(R.id.live_list_error_container)
+        val userAvatarContainer = findViewById<android.widget.FrameLayout>(R.id.user_avatar_container)
 
         if (TokenManager.isLoggedIn(this)) {
-            // 已登录状态
             userInfoContainer.visibility = View.VISIBLE
             loginButtonContainer.visibility = View.GONE
-            gridView.visibility = View.VISIBLE
-            
-            // 获取用户信息
             fetchUserInfo()
-            
-            // 获取真实的直播间数据
             fetchLiveUsers()
         } else {
-            // 未登录状态
+            isLoadingLiveList = false
+            liveListState = LiveListState.Loading
             userInfoContainer.visibility = View.GONE
             loginButtonContainer.visibility = View.VISIBLE
             gridView.visibility = View.GONE
-            
-            // 延迟设置焦点到登录按钮
+            loadingContainer.visibility = View.GONE
+            emptyContainer.visibility = View.GONE
+            errorContainer.visibility = View.GONE
+            userAvatarContainer.nextFocusDownId = R.id.main_grid
             loginButtonContainer.postDelayed({
                 val loginButton = findViewById<android.widget.FrameLayout>(R.id.login_button)
                 loginButton.requestFocus()
@@ -309,14 +292,83 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun renderLiveListState(state: LiveListState) {
+        liveListState = state
+        val gridView = findViewById<androidx.leanback.widget.VerticalGridView>(R.id.main_grid)
+        val loadingContainer = findViewById<android.widget.LinearLayout>(R.id.live_list_loading_container)
+        val emptyContainer = findViewById<android.widget.LinearLayout>(R.id.live_list_empty_container)
+        val errorContainer = findViewById<android.widget.LinearLayout>(R.id.live_list_error_container)
+        val userAvatarContainer = findViewById<android.widget.FrameLayout>(R.id.user_avatar_container)
+        val emptyRefreshButton = findViewById<android.widget.ImageButton>(R.id.live_list_empty_refresh_button)
+        val errorRefreshButton = findViewById<android.widget.ImageButton>(R.id.live_list_error_refresh_button)
+
+        when (state) {
+            LiveListState.Loading -> {
+                gridView.visibility = View.GONE
+                loadingContainer.visibility = View.VISIBLE
+                emptyContainer.visibility = View.GONE
+                errorContainer.visibility = View.GONE
+                userAvatarContainer.nextFocusDownId = R.id.main_grid
+            }
+            LiveListState.Content -> {
+                gridView.visibility = View.VISIBLE
+                loadingContainer.visibility = View.GONE
+                emptyContainer.visibility = View.GONE
+                errorContainer.visibility = View.GONE
+                userAvatarContainer.nextFocusDownId = R.id.main_grid
+            }
+            LiveListState.Empty -> {
+                gridView.visibility = View.GONE
+                loadingContainer.visibility = View.GONE
+                emptyContainer.visibility = View.VISIBLE
+                errorContainer.visibility = View.GONE
+                userAvatarContainer.nextFocusDownId = R.id.live_list_empty_refresh_button
+                emptyContainer.postDelayed({
+                    emptyRefreshButton.requestFocus()
+                }, 100)
+            }
+            LiveListState.Error -> {
+                gridView.visibility = View.GONE
+                loadingContainer.visibility = View.GONE
+                emptyContainer.visibility = View.GONE
+                errorContainer.visibility = View.VISIBLE
+                userAvatarContainer.nextFocusDownId = R.id.live_list_error_refresh_button
+                errorContainer.postDelayed({
+                    errorRefreshButton.requestFocus()
+                }, 100)
+            }
+        }
+    }
+
     // 设置登录按钮点击事件
     private fun setupLoginButton() {
         val loginButton = findViewById<android.widget.FrameLayout>(R.id.login_button)
         loginButton.setOnClickListener {
-            // 跳转到登录Activity
             val intent = Intent(this, LoginActivity::class.java)
             startActivity(intent)
         }
+    }
+
+    private fun setupStateRefreshButtons() {
+        val emptyRefreshButton = findViewById<android.widget.ImageButton>(R.id.live_list_empty_refresh_button)
+        val errorRefreshButton = findViewById<android.widget.ImageButton>(R.id.live_list_error_refresh_button)
+        emptyRefreshButton.setOnClickListener {
+            retryFetchLiveRooms()
+        }
+        errorRefreshButton.setOnClickListener {
+            retryFetchLiveRooms()
+        }
+    }
+
+    private fun retryFetchLiveRooms() {
+        if (!TokenManager.isLoggedIn(this)) {
+            return
+        }
+        if (isLoadingLiveList) {
+            Toast.makeText(this, "正在刷新直播间列表...", Toast.LENGTH_SHORT).show()
+            return
+        }
+        fetchLiveUsers()
     }
 
     // 设置用户头像点击事件
@@ -336,16 +388,30 @@ class MainActivity : AppCompatActivity() {
                         val gridView = findViewById<androidx.leanback.widget.VerticalGridView>(R.id.main_grid)
                         val adapter = gridView.adapter as? LiveRoomAdapter
                         val itemCount = adapter?.itemCount ?: 0
-                        if (gridView.visibility == android.view.View.VISIBLE && itemCount > 0) {
-                            gridView.scrollToPosition(0)
-                            gridView.post {
-                                val holder = gridView.findViewHolderForAdapterPosition(0)
-                                if (holder != null) {
-                                    holder.itemView.requestFocus()
-                                } else {
-                                    val child = gridView.getChildAt(0)
-                                    child?.requestFocus()
+                        when (liveListState) {
+                            LiveListState.Content -> {
+                                if (gridView.visibility == android.view.View.VISIBLE && itemCount > 0) {
+                                    gridView.scrollToPosition(0)
+                                    gridView.post {
+                                        val holder = gridView.findViewHolderForAdapterPosition(0)
+                                        if (holder != null) {
+                                            holder.itemView.requestFocus()
+                                        } else {
+                                            val child = gridView.getChildAt(0)
+                                            child?.requestFocus()
+                                        }
+                                    }
                                 }
+                            }
+                            LiveListState.Empty -> {
+                                val refreshButton = findViewById<android.widget.ImageButton>(R.id.live_list_empty_refresh_button)
+                                refreshButton.requestFocus()
+                            }
+                            LiveListState.Error -> {
+                                val refreshButton = findViewById<android.widget.ImageButton>(R.id.live_list_error_refresh_button)
+                                refreshButton.requestFocus()
+                            }
+                            LiveListState.Loading -> {
                             }
                         }
                         return@setOnKeyListener true
@@ -417,35 +483,14 @@ class MainActivity : AppCompatActivity() {
     
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
         if (keyCode == android.view.KeyEvent.KEYCODE_MENU) {
-            // 检查是否已登录且在直播间列表页面
             if (TokenManager.isLoggedIn(this)) {
-                val gridView = findViewById<androidx.leanback.widget.VerticalGridView>(R.id.main_grid)
-                if (gridView.visibility == View.VISIBLE) {
-                    // 刷新直播间列表
-                    fetchLiveUsers()
-                    // 显示刷新提示
-                    Toast.makeText(this, "正在刷新直播间列表...", Toast.LENGTH_SHORT).show()
-                    return true
-                }
+                retryFetchLiveRooms()
+                return true
             }
         }
         
         
         return super.onKeyDown(keyCode, event)
-    }
-    
-    // 生成模拟数据
-    private fun generateMockData(): List<LiveRoom> {
-        return listOf(
-            LiveRoom(1, 80397L, "", "主播1", "", "精彩直播，不容错过！", "游戏"),
-            LiveRoom(2, 80398L, "", "主播2", "", "欢迎来到我的直播间！", "娱乐"),
-            LiveRoom(3, 80399L, "", "主播3", "", "今天给大家带来精彩内容！", "音乐"),
-            LiveRoom(4, 80400L, "", "主播4", "", "感谢大家的支持！", "舞蹈"),
-            LiveRoom(5, 80401L, "", "主播5", "", "欢迎新朋友！", "游戏"),
-            LiveRoom(6, 80402L, "", "主播6", "", "精彩继续！", "娱乐"),
-            LiveRoom(7, 80403L, "", "主播7", "", "大家晚上好！", "音乐"),
-            LiveRoom(8, 80404L, "", "主播8", "", "今天的直播很精彩！", "舞蹈")
-        )
     }
     
     // RecyclerView适配器
