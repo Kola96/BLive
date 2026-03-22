@@ -71,13 +71,14 @@ class LivePlayActivity : AppCompatActivity() {
     private var selectedDanmuOpacity: Float = 1.0f
     private var selectedDanmuSize: Float = 1.0f
     
-    private var isSettingsVisible: Boolean = false
     private var currentExpandedCategory: String? = null
     private var lastBackPressedAt: Long = 0L
     private val backPressExitWindowMs: Long = 3000L
     
     private lateinit var playSettingsAdapter: PlaySettingsCategoryAdapter
     private lateinit var danmuSettingsAdapter: PlaySettingsCategoryAdapter
+    private lateinit var settingsPanelController: PlaySettingsPanelController
+    private val streamResolver = PlayStreamResolver()
 
     companion object {
         private const val TAG = "LivePlayActivity"
@@ -131,6 +132,14 @@ class LivePlayActivity : AppCompatActivity() {
         }
 
         setupRecyclerViews()
+        settingsPanelController = PlaySettingsPanelController(
+            settingsPanel = settingsPanel,
+            playerView = playerView,
+            playSettingsRecyclerView = playSettingsRecyclerView,
+            playSettingsAdapter = playSettingsAdapter,
+            qualityCategoryId = CATEGORY_QUALITY,
+            logTag = TAG
+        )
         fetchRoomPlayInfo(currentRoomId)
     }
     
@@ -309,9 +318,9 @@ class LivePlayActivity : AppCompatActivity() {
                     CATEGORY_QUALITY -> {
                         val filteredOptions = qualityOptions.filter { option ->
                             data != null && 
-                            findStreamUrl(data, "http_stream", "flv", selectedCodec, option.qn, selectedCdnHost).isNotEmpty() ||
+                            streamResolver.findStreamUrl(data, "http_stream", "flv", selectedCodec, option.qn, selectedCdnHost).isNotEmpty() ||
                             data != null && 
-                            findStreamUrl(data, "http_stream", "ts", selectedCodec, option.qn, selectedCdnHost).isNotEmpty()
+                            streamResolver.findStreamUrl(data, "http_stream", "ts", selectedCodec, option.qn, selectedCdnHost).isNotEmpty()
                         }
                         playDisplayList.addAll(filteredOptions.map { 
                             PlaySettingsOption(it.qn.toString(), it.name, it.qn == selectedQn, category.id) 
@@ -320,9 +329,9 @@ class LivePlayActivity : AppCompatActivity() {
                     CATEGORY_CDN -> {
                         val filteredOptions = cdnOptions.filter { option ->
                             data != null && 
-                            findStreamUrl(data, "http_stream", "flv", selectedCodec, selectedQn, option.host).isNotEmpty() ||
+                            streamResolver.findStreamUrl(data, "http_stream", "flv", selectedCodec, selectedQn, option.host).isNotEmpty() ||
                             data != null && 
-                            findStreamUrl(data, "http_stream", "ts", selectedCodec, selectedQn, option.host).isNotEmpty()
+                            streamResolver.findStreamUrl(data, "http_stream", "ts", selectedCodec, selectedQn, option.host).isNotEmpty()
                         }
                         playDisplayList.addAll(filteredOptions.map { 
                             PlaySettingsOption(it.host, it.cdnName, it.host == selectedCdnHost, category.id) 
@@ -331,9 +340,9 @@ class LivePlayActivity : AppCompatActivity() {
                     CATEGORY_CODEC -> {
                         val filteredOptions = codecOptions.filter { option ->
                             data != null && 
-                            findStreamUrl(data, "http_stream", "flv", option.codecName, selectedQn, selectedCdnHost).isNotEmpty() ||
+                            streamResolver.findStreamUrl(data, "http_stream", "flv", option.codecName, selectedQn, selectedCdnHost).isNotEmpty() ||
                             data != null && 
-                            findStreamUrl(data, "http_stream", "ts", option.codecName, selectedQn, selectedCdnHost).isNotEmpty()
+                            streamResolver.findStreamUrl(data, "http_stream", "ts", option.codecName, selectedQn, selectedCdnHost).isNotEmpty()
                         }
                         playDisplayList.addAll(filteredOptions.map { 
                             PlaySettingsOption(it.codecName, it.displayName, it.codecName == selectedCodec, category.id) 
@@ -536,7 +545,7 @@ class LivePlayActivity : AppCompatActivity() {
                         
                         if (playInfoResponse != null && playInfoResponse.code == 0) {
                             Log.d(TAG, "API返回成功，live_status: ${playInfoResponse.data?.liveStatus}")
-                            
+                            this@LivePlayActivity.response = playInfoResponse
                             parsePlayOptions(playInfoResponse)
                             playUrlList = buildAllPlayUrls(playInfoResponse)
                             
@@ -600,72 +609,13 @@ class LivePlayActivity : AppCompatActivity() {
     
     private fun parsePlayOptions(response: RoomPlayInfoResponse) {
         val data = response.data ?: return
-        
-        val qualitySet = mutableSetOf<Int>()
-        val cdnSet = mutableSetOf<String>()
-        val codecSet = mutableSetOf<String>()
-        
-        for (stream in data.playurlInfo.playurl.stream) {
-            for (format in stream.format) {
-                for (codec in format.codec) {
-                    codecSet.add(codec.codecName)
-                    qualitySet.addAll(codec.acceptQn)
-                    for (urlInfo in codec.urlInfo) {
-                        val cdnName = urlInfo.host.substringAfter("://").substringBefore(".")
-                        cdnSet.add(cdnName)
-                    }
-                }
-            }
-        }
-        
-        // Calculate best quality based on preferences
         val prefQn = UserPreferencesManager.getQualityQn(this)
-        if (qualitySet.isNotEmpty()) {
-            if (qualitySet.contains(prefQn)) {
-                selectedQn = prefQn
-            } else {
-                val maxQn = qualitySet.maxOrNull() ?: 0
-                val minQn = qualitySet.minOrNull() ?: 0
-                
-                if (maxQn < prefQn) {
-                    selectedQn = maxQn
-                } else if (minQn > prefQn) {
-                    selectedQn = minQn
-                } else {
-                    // Find largest qn in qualitySet that is < prefQn
-                    selectedQn = qualitySet.filter { it < prefQn }.maxOrNull() ?: maxQn
-                }
-            }
-        }
-
-        qualityOptions = qualitySet.map { qn ->
-            val name = when (qn) {
-                10000 -> "原画"
-                400 -> "蓝光"
-                250 -> "超清"
-                150 -> "高清"
-                80 -> "流畅"
-                else -> "未知($qn)"
-            }
-            QualityOption(qn, name, isSelected = qn == selectedQn)
-        }.sortedByDescending { it.qn }
-        
-        cdnOptions = cdnSet.map { cdnName ->
-            CdnOption(cdnName, cdnName, isSelected = cdnName == selectedCdnHost)
-        }
-        
-        codecOptions = codecSet.map { codecName ->
-            val displayName = when (codecName) {
-                "avc" -> "H.264 (AVC)"
-                "hevc" -> "H.265 (HEVC)"
-                else -> codecName.uppercase()
-            }
-            CodecOption(codecName, displayName, isSelected = codecName == selectedCodec)
-        }
-        
-        if (selectedCdnHost.isEmpty() && cdnOptions.isNotEmpty()) {
-            selectedCdnHost = cdnOptions[0].host
-        }
+        val parseResult = streamResolver.parseOptions(data, prefQn, selectedCdnHost, selectedCodec)
+        selectedQn = parseResult.selectedQn
+        selectedCdnHost = parseResult.selectedCdnHost
+        qualityOptions = parseResult.qualityOptions
+        cdnOptions = parseResult.cdnOptions
+        codecOptions = parseResult.codecOptions
         
         Log.d(TAG, "解析到 ${qualityOptions.size} 个清晰度选项")
         Log.d(TAG, "解析到 ${cdnOptions.size} 个CDN选项")
@@ -713,118 +663,18 @@ class LivePlayActivity : AppCompatActivity() {
     
     private fun buildPlayUrlWithSelection(): String {
         val data = response?.data ?: return ""
-        
-        val preferredProtocolList = listOf("http_stream", "http_hls")
-        val preferredFormatList = listOf("flv", "ts", "fmp4")
-        
-        for (protocol in preferredProtocolList) {
-            for (format in preferredFormatList) {
-                val url = findStreamUrl(data, protocol, format, selectedCodec, selectedQn, selectedCdnHost)
-                if (url.isNotEmpty()) {
-                    return url
-                }
-            }
-        }
-        
-        return ""
+        return streamResolver.buildPreferredUrl(data, selectedCodec, selectedQn, selectedCdnHost)
     }
     
     private var response: RoomPlayInfoResponse? = null
 
     private fun buildAllPlayUrls(response: RoomPlayInfoResponse): List<String> {
-        this.response = response
         val data = response.data ?: return emptyList()
-        
         Log.d(TAG, "开始构建所有播放URL")
         Log.d(TAG, "可用协议数量: ${data.playurlInfo.playurl.stream.size}")
-
-        val urlList = mutableListOf<String>()
-        
-        val preferredQnList = listOf(10000, 400, 250, 150, 80)
-        val preferredProtocolList = listOf("http_stream", "http_hls")
-        val preferredFormatList = listOf("flv", "ts", "fmp4")
-        val preferredCodecList = listOf("avc", "hevc")
-        
-        for (protocol in preferredProtocolList) {
-            for (format in preferredFormatList) {
-                for (codec in preferredCodecList) {
-                    for (qn in preferredQnList) {
-                        val urls = findStreamUrls(data, protocol, format, codec, qn)
-                        urlList.addAll(urls)
-                    }
-                }
-            }
-        }
-        
+        val urlList = streamResolver.buildAllUrls(data)
         Log.d(TAG, "总共构建了 ${urlList.size} 个播放URL")
         return urlList
-    }
-    
-    private fun findStreamUrl(
-        data: com.blive.tv.data.model.RoomPlayInfoData,
-        targetProtocol: String,
-        targetFormat: String,
-        targetCodec: String,
-        targetQn: Int,
-        targetCdn: String
-    ): String {
-        for (stream in data.playurlInfo.playurl.stream) {
-            if (stream.protocolName == targetProtocol) {
-                for (format in stream.format) {
-                    if (format.formatName == targetFormat) {
-                        for (codec in format.codec) {
-                            if (codec.codecName == targetCodec && codec.acceptQn.contains(targetQn)) {
-                                for (urlInfo in codec.urlInfo) {
-                                    val cdnName = urlInfo.host.substringAfter("://").substringBefore(".")
-                                    if (targetCdn.isEmpty() || cdnName == targetCdn) {
-                                        val host = urlInfo.host.trim()
-                                        val baseUrl = codec.baseUrl
-                                        val extra = urlInfo.extra
-                                        return "$host$baseUrl$extra"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        return ""
-    }
-    
-    private fun findStreamUrls(
-        data: com.blive.tv.data.model.RoomPlayInfoData,
-        targetProtocol: String,
-        targetFormat: String,
-        targetCodec: String,
-        targetQn: Int
-    ): List<String> {
-        val urls = mutableListOf<String>()
-        
-        for (stream in data.playurlInfo.playurl.stream) {
-            if (stream.protocolName == targetProtocol) {
-                for (format in stream.format) {
-                    if (format.formatName == targetFormat) {
-                        for (codec in format.codec) {
-                            if (codec.codecName == targetCodec && codec.acceptQn.contains(targetQn)) {
-                                for (urlInfo in codec.urlInfo) {
-                                    val host = urlInfo.host.trim()
-                                    val baseUrl = codec.baseUrl
-                                    val extra = urlInfo.extra
-                                    val fullUrl = "$host$baseUrl$extra"
-                                    
-                                    // Log.d(TAG, "找到流: $targetProtocol/$targetFormat/$targetCodec/$qnName($targetQn) - CDN: ${host.substringAfter("://").substringBefore(".")}")
-                                    urls.add(fullUrl)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        return urls
     }
 
     // --- 双流竞速加载逻辑 ---
@@ -841,9 +691,9 @@ class LivePlayActivity : AppCompatActivity() {
         // 找到qn最小的选项
         val minQn = qualityOptions.minByOrNull { it.qn }?.qn ?: selectedQn
         val fastUrl = if (minQn != selectedQn) {
-             var url = findStreamUrl(data, "http_stream", "flv", selectedCodec, minQn, selectedCdnHost)
+             var url = streamResolver.findStreamUrl(data, "http_stream", "flv", selectedCodec, minQn, selectedCdnHost)
              if (url.isEmpty()) {
-                 url = findStreamUrl(data, "http_stream", "ts", selectedCodec, minQn, selectedCdnHost)
+                 url = streamResolver.findStreamUrl(data, "http_stream", "ts", selectedCodec, minQn, selectedCdnHost)
              }
              url
         } else {
@@ -1148,64 +998,22 @@ class LivePlayActivity : AppCompatActivity() {
         ToastHelper.showTextToast(this, message)
     }
     
-    private fun toggleSettingsPanel() {
-        isSettingsVisible = !isSettingsVisible
-        
-        if (isSettingsVisible) {
-            Log.d(TAG, "显示设置面板")
-            settingsPanel.visibility = View.VISIBLE
-            
-            // 确保焦点正确设置到画质选项
-            settingsPanel.post {
-                val categories = playSettingsAdapter.getCategories()
-                val position = categories.indexOfFirst { it.id == CATEGORY_QUALITY }
-                if (position >= 0) {
-                    val viewHolder = playSettingsRecyclerView.findViewHolderForAdapterPosition(position)
-                    if (viewHolder != null) {
-                        viewHolder.itemView.requestFocus()
-                        Log.d(TAG, "显示设置面板 - 请求焦点到画质选项成功")
-                    } else {
-                        playSettingsRecyclerView.requestFocus()
-                        Log.d(TAG, "显示设置面板 - 请求焦点到playSettingsRecyclerView")
-                    }
-                } else {
-                    playSettingsRecyclerView.requestFocus()
-                    Log.d(TAG, "显示设置面板 - 未找到画质选项，请求焦点到playSettingsRecyclerView")
-                }
-            }
-        } else {
-            settingsPanel.visibility = View.GONE
-            collapseAllCategories()
-            settingsPanel.clearFocus()
-            playerView.requestFocus()
-            Log.d(TAG, "隐藏设置面板")
-        }
-    }
-    
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        Log.d(TAG, "onKeyDown - keyCode: $keyCode, isSettingsVisible: $isSettingsVisible, currentFocus: ${currentFocus?.javaClass?.simpleName}")
-        
-        // 当设置面板可见时，检查焦点是否有效
-        if (isSettingsVisible) {
-            val isFocusValid = isFocusOnValidItem()
-            Log.d(TAG, "isFocusValid: $isFocusValid, currentFocus: ${currentFocus?.javaClass?.simpleName}")
-            
-            // 确认键或任意方向键，且焦点无效时，重置焦点到画质选项
-            if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || 
-                 keyCode == KeyEvent.KEYCODE_DPAD_UP || 
-                 keyCode == KeyEvent.KEYCODE_DPAD_DOWN || 
-                 keyCode == KeyEvent.KEYCODE_DPAD_LEFT || 
-                 keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) && !isFocusValid) {
-                Log.d(TAG, "设置面板可见但焦点无效，重置焦点到画质选项")
-                resetFocusToQualityOption()
-                return true
-            }
+        Log.d(
+            TAG,
+            "onKeyDown - keyCode: $keyCode, isSettingsVisible: ${settingsPanelController.isVisible}, currentFocus: ${currentFocus?.javaClass?.simpleName}"
+        )
+
+        if (settingsPanelController.recoverFocusIfNeeded(keyCode, currentFocus)) {
+            return true
         }
-        
+
         when (keyCode) {
             KeyEvent.KEYCODE_MENU -> {
                 Log.d(TAG, "MENU key pressed")
-                toggleSettingsPanel()
+                settingsPanelController.toggle {
+                    collapseAllCategories()
+                }
                 return true
             }
             KeyEvent.KEYCODE_DPAD_CENTER -> {
@@ -1214,13 +1022,15 @@ class LivePlayActivity : AppCompatActivity() {
                 return super.onKeyDown(keyCode, event)
             }
             KeyEvent.KEYCODE_BACK -> {
-                if (isSettingsVisible) {
+                if (settingsPanelController.isVisible) {
                     if (currentExpandedCategory != null) {
                         collapseAllCategories(focusCategoryId = currentExpandedCategory)
                         return true
                     }
                     Log.d(TAG, "BACK key pressed while settings visible")
-                    toggleSettingsPanel()
+                    settingsPanelController.hide {
+                        collapseAllCategories()
+                    }
                     return true
                 }
                 val now = System.currentTimeMillis()
@@ -1234,8 +1044,8 @@ class LivePlayActivity : AppCompatActivity() {
             }
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 Log.d(TAG, "DPAD_DOWN key pressed")
-                if (!isSettingsVisible) {
-                    toggleSettingsPanel()
+                if (!settingsPanelController.isVisible) {
+                    settingsPanelController.show()
                     return true
                 }
             }
@@ -1244,41 +1054,6 @@ class LivePlayActivity : AppCompatActivity() {
             }
         }
         return super.onKeyDown(keyCode, event)
-    }
-    
-    private fun isFocusOnValidItem(): Boolean {
-        val currentFocusView = currentFocus ?: return false
-        
-        // 检查焦点是否在 RecyclerView 的 item 上
-        val isOnCategoryItem = currentFocusView.parent is RecyclerView || 
-                               (currentFocusView.parent as? View)?.parent is RecyclerView
-        val isOnOptionItem = currentFocusView.parent is RecyclerView || 
-                             (currentFocusView.parent as? View)?.parent is RecyclerView
-        
-        // 也检查焦点是否是 RecyclerView 本身
-        val isOnRecyclerView = currentFocusView is RecyclerView
-        
-        Log.d(TAG, "isFocusOnValidItem - isOnCategoryItem: $isOnCategoryItem, isOnOptionItem: $isOnOptionItem, isOnRecyclerView: $isOnRecyclerView")
-        
-        return isOnCategoryItem || isOnOptionItem || isOnRecyclerView
-    }
-    
-    private fun resetFocusToQualityOption() {
-        val categories = playSettingsAdapter.getCategories()
-        val position = categories.indexOfFirst { it.id == CATEGORY_QUALITY }
-        if (position >= 0) {
-            val viewHolder = playSettingsRecyclerView.findViewHolderForAdapterPosition(position)
-            if (viewHolder != null) {
-                viewHolder.itemView.requestFocus()
-                Log.d(TAG, "resetFocusToQualityOption - 请求焦点到画质选项成功")
-            } else {
-                playSettingsRecyclerView.requestFocus()
-                Log.d(TAG, "resetFocusToQualityOption - 请求焦点到playSettingsRecyclerView")
-            }
-        } else {
-            playSettingsRecyclerView.requestFocus()
-            Log.d(TAG, "resetFocusToQualityOption - 未找到画质选项，请求焦点到playSettingsRecyclerView")
-        }
     }
 
     /**
@@ -1396,9 +1171,9 @@ class LivePlayActivity : AppCompatActivity() {
                         val playInfoResponse = response.body()!!
                         val data = playInfoResponse.data
                         if (data != null) {
-                             var url = findStreamUrl(data, "http_stream", "flv", selectedCodec, selectedQn, selectedCdnHost)
+                             var url = streamResolver.findStreamUrl(data, "http_stream", "flv", selectedCodec, selectedQn, selectedCdnHost)
                              if (url.isEmpty()) {
-                                 url = findStreamUrl(data, "http_stream", "ts", selectedCodec, selectedQn, selectedCdnHost)
+                                 url = streamResolver.findStreamUrl(data, "http_stream", "ts", selectedCodec, selectedQn, selectedCdnHost)
                              }
                              
                              if (url.isNotEmpty()) {
