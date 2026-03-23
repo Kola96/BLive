@@ -4,6 +4,7 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.leanback.widget.VerticalGridView
 import com.blive.tv.R
 
@@ -15,6 +16,9 @@ data class MainViewRefs(
     val emptyContainer: LinearLayout,
     val errorContainer: LinearLayout,
     val userAvatarContainer: FrameLayout,
+    val tabContainer: LinearLayout,
+    val followingTabView: TextView,
+    val recommendTabView: TextView,
     val emptyRefreshButton: ImageButton,
     val errorRefreshButton: ImageButton
 )
@@ -24,9 +28,11 @@ class MainUiRenderer(private val views: MainViewRefs) {
         if (isLoggedIn) {
             views.userInfoContainer.visibility = View.VISIBLE
             views.loginButtonContainer.visibility = View.GONE
+            views.tabContainer.visibility = View.VISIBLE
         } else {
             views.userInfoContainer.visibility = View.GONE
             views.loginButtonContainer.visibility = View.VISIBLE
+            views.tabContainer.visibility = View.GONE
             views.gridView.visibility = View.GONE
             views.loadingContainer.visibility = View.GONE
             views.emptyContainer.visibility = View.GONE
@@ -75,5 +81,13 @@ class MainUiRenderer(private val views: MainViewRefs) {
                 }, 100)
             }
         }
+    }
+
+    fun renderTabState(selectedTab: MainTabType) {
+        val followingSelected = selectedTab == MainTabType.Following
+        views.followingTabView.isSelected = followingSelected
+        views.recommendTabView.isSelected = !followingSelected
+        views.followingTabView.setTextColor(if (followingSelected) 0xFFFFFFFF.toInt() else 0xFFB0B0B0.toInt())
+        views.recommendTabView.setTextColor(if (followingSelected) 0xFFB0B0B0.toInt() else 0xFFFFFFFF.toInt())
     }
 }

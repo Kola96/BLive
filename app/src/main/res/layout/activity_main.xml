@@ -26,11 +26,45 @@
             android:src="@mipmap/ic_launcher"
             android:scaleType="centerCrop" />
 
-        <!-- 中间区域（可扩展） -->
-        <View
+        <LinearLayout
+            android:id="@+id/main_tab_container"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="1" />
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/main_tab_following"
+                android:layout_width="120dp"
+                android:layout_height="44dp"
+                android:gravity="center"
+                android:text="关注"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:background="@drawable/main_tab_background"
+                android:focusable="true"
+                android:focusableInTouchMode="true"
+                android:nextFocusRight="@id/main_tab_recommend"
+                android:nextFocusDown="@id/main_grid" />
+
+            <TextView
+                android:id="@+id/main_tab_recommend"
+                android:layout_width="120dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="16dp"
+                android:gravity="center"
+                android:text="推荐"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="#B0B0B0"
+                android:background="@drawable/main_tab_background"
+                android:focusable="true"
+                android:focusableInTouchMode="true"
+                android:nextFocusLeft="@id/main_tab_following"
+                android:nextFocusDown="@id/main_grid" />
+        </LinearLayout>
 
         <!-- 右侧区域：用户信息 -->
         <LinearLayout
@@ -65,6 +99,7 @@
                     android:ellipsize="end"
                     android:gravity="right"
                     android:padding="4dp"
+                    android:nextFocusLeft="@id/main_tab_recommend"
                     android:focusable="false"
                     android:focusableInTouchMode="false" />
                 

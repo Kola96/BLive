@@ -15,5 +15,11 @@ data class UserInfoData(
     @SerializedName("isLogin") val isLogin: Boolean,
     @SerializedName("face") val face: String,
     @SerializedName("uname") val uname: String,
-    @SerializedName("mid") val mid: Long
+    @SerializedName("mid") val mid: Long,
+    @SerializedName("wbi_img") val wbiImg: WbiImgData? = null
+)
+
+data class WbiImgData(
+    @SerializedName("img_url") val imgUrl: String = "",
+    @SerializedName("sub_url") val subUrl: String = ""
 )

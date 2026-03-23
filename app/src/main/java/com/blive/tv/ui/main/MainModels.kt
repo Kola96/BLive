@@ -21,10 +21,19 @@ enum class LiveListState {
     Error
 }
 
+enum class MainTabType {
+    Following,
+    Recommend
+}
+
 data class MainScreenState(
     val isLoggedIn: Boolean = false,
     val userProfile: UserProfile? = null,
-    val liveRooms: List<LiveRoom> = emptyList(),
-    val liveListState: LiveListState = LiveListState.Loading,
-    val isLoadingLiveList: Boolean = false
+    val selectedTab: MainTabType = MainTabType.Following,
+    val followingRooms: List<LiveRoom> = emptyList(),
+    val recommendRooms: List<LiveRoom> = emptyList(),
+    val followingListState: LiveListState = LiveListState.Loading,
+    val recommendListState: LiveListState = LiveListState.Loading,
+    val isLoadingFollowing: Boolean = false,
+    val isLoadingRecommend: Boolean = false
 )

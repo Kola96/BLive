@@ -24,7 +24,6 @@ import com.blive.tv.danmu.DanmuTcpClient
 import com.blive.tv.danmu.SimpleDanmuView
 import com.blive.tv.network.RetrofitClient
 import com.blive.tv.utils.ToastHelper
-import com.blive.tv.utils.TokenManager
 import com.blive.tv.utils.UserPreferencesManager
 
 class LivePlayActivity : AppCompatActivity() {
@@ -526,12 +525,8 @@ class LivePlayActivity : AppCompatActivity() {
     }
 
     private fun fetchRoomPlayInfo(roomId: Long) {
-        val sessData = TokenManager.getSessData(this)
-        val cookie = if (sessData != null) "SESSDATA=$sessData" else ""
-        
-        Log.d(TAG, "请求直播间播放信息，roomId: $roomId, cookie: $cookie")
-        
-        RetrofitClient.liveApiService.getRoomPlayInfo(cookie, roomId).enqueue(
+        Log.d(TAG, "请求直播间播放信息，roomId: $roomId")
+        RetrofitClient.liveApiService.getRoomPlayInfo(roomId).enqueue(
             object : retrofit2.Callback<RoomPlayInfoResponse> {
                 override fun onResponse(
                     call: retrofit2.Call<RoomPlayInfoResponse>,
@@ -1161,10 +1156,7 @@ class LivePlayActivity : AppCompatActivity() {
     }
 
     private fun fetchRoomPlayInfoForRefresh(roomId: Long) {
-        val sessData = TokenManager.getSessData(this)
-        val cookie = if (sessData != null) "SESSDATA=$sessData" else ""
-        
-        RetrofitClient.liveApiService.getRoomPlayInfo(cookie, roomId).enqueue(
+        RetrofitClient.liveApiService.getRoomPlayInfo(roomId).enqueue(
             object : retrofit2.Callback<RoomPlayInfoResponse> {
                 override fun onResponse(call: retrofit2.Call<RoomPlayInfoResponse>, response: retrofit2.Response<RoomPlayInfoResponse>) {
                     if (response.isSuccessful && response.body()?.code == 0) {

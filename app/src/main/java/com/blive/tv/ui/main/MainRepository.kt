@@ -1,14 +1,20 @@
 package com.blive.tv.ui.main
 
-import android.content.Context
+import com.blive.tv.data.model.AuthCookie
 import com.blive.tv.data.model.LiveUserItem
 import com.blive.tv.data.model.LiveUsersResponse
+import com.blive.tv.data.model.toLiveRoom
 import com.blive.tv.network.RetrofitClient
+import com.blive.tv.network.WbiKeyParser
+import com.blive.tv.network.WbiSigner
+import com.blive.tv.network.WebIdExtractor
+import com.blive.tv.utils.AppRuntime
 import com.blive.tv.utils.TokenManager
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -16,11 +22,12 @@ import java.io.IOException
 import java.util.concurrent.CancellationException
 import kotlin.coroutines.suspendCoroutine
 
-class MainRepository(private val context: Context) {
+class MainRepository {
+    private var recommendCache: RecommendCache? = null
+
     suspend fun fetchUserProfile(): Result<UserProfile> = withContext(Dispatchers.IO) {
         runCatching {
-            val cookie = buildCookie()
-            val response = awaitCall(RetrofitClient.apiService.getNavInfo(cookie))
+            val response = awaitCall(RetrofitClient.apiService.getNavInfo())
             if (!response.isSuccessful) {
                 throw IOException("网络请求失败：${response.code()}")
             }
@@ -37,8 +44,7 @@ class MainRepository(private val context: Context) {
 
     suspend fun fetchLiveRooms(): Result<List<LiveRoom>> = withContext(Dispatchers.IO) {
         runCatching {
-            val cookie = buildCookie()
-            val liveUsers = fetchAllLiveUsers(cookie)
+            val liveUsers = fetchAllLiveUsers()
             liveUsers.map { item ->
                 LiveRoom(
                     roomId = item.roomId,
@@ -52,12 +58,114 @@ class MainRepository(private val context: Context) {
         }
     }
 
-    private suspend fun fetchAllLiveUsers(cookie: String): List<LiveUserItem> {
+    fun getCachedRecommendRooms(): List<LiveRoom> {
+        return recommendCache?.rooms.orEmpty()
+    }
+
+    suspend fun fetchRecommendRooms(
+        page: Int = 1,
+        pageSize: Int = 30
+    ): Result<List<LiveRoom>> = withContext(Dispatchers.IO) {
+        runCatching {
+            ensureSpiCookies()
+            val allPageResponse = awaitCall(RetrofitClient.liveWebApiService.getLiveAllPageRaw())
+            if (!allPageResponse.isSuccessful) {
+                throw IOException("获取w_webid失败：${allPageResponse.code()}")
+            }
+            val rawHtml = allPageResponse.body()?.string().orEmpty()
+            val wWebId = WebIdExtractor.extract(rawHtml)
+            if (wWebId.isEmpty()) {
+                throw IOException("提取w_webid失败")
+            }
+            val navResponse = awaitCall(RetrofitClient.apiService.getNavInfo())
+            if (!navResponse.isSuccessful) {
+                throw IOException("获取WBI密钥失败：${navResponse.code()}")
+            }
+            val navBody = navResponse.body() ?: throw IOException("nav响应为空")
+            if (navBody.code != 0 || navBody.data == null) {
+                throw IOException(navBody.message.ifEmpty { "获取WBI密钥失败" })
+            }
+            val imgUrl = navBody.data.wbiImg?.imgUrl.orEmpty()
+            val subUrl = navBody.data.wbiImg?.subUrl.orEmpty()
+            val imgKey = WbiKeyParser.parseFromUrl(imgUrl)
+            val subKey = WbiKeyParser.parseFromUrl(subUrl)
+            if (imgKey.isEmpty() || subKey.isEmpty()) {
+                throw IOException("解析WBI密钥失败")
+            }
+            val unsignedParams = mutableMapOf(
+                "page" to page.toString(),
+                "page_size" to pageSize.toString(),
+                "platform" to "web",
+                "web_location" to "444.253",
+                "w_webid" to wWebId
+            )
+            val (wRid, wts) = WbiSigner.sign(unsignedParams, imgKey, subKey)
+            val requestParams = unsignedParams.toMutableMap()
+            requestParams["w_rid"] = wRid
+            requestParams["wts"] = wts
+            val recommendResponse = awaitCall(RetrofitClient.liveApiService.getUserRecommend(requestParams))
+            if (!recommendResponse.isSuccessful) {
+                throw IOException("获取推荐直播间失败：${recommendResponse.code()}")
+            }
+            val recommendBody = recommendResponse.body() ?: throw IOException("推荐直播间响应为空")
+            if (recommendBody.code != 0) {
+                throw IOException(recommendBody.message.ifEmpty { "获取推荐直播间失败" })
+            }
+            val rooms = recommendBody.data?.list.orEmpty().map { it.toLiveRoom() }
+            recommendCache = RecommendCache(rooms = rooms, savedAt = System.currentTimeMillis())
+            rooms
+        }
+    }
+
+    private suspend fun ensureSpiCookies() {
+        val spiResponse = awaitCall(RetrofitClient.apiService.getFingerSpiRaw())
+        if (!spiResponse.isSuccessful) return
+        val spiBody = spiResponse.body()?.string().orEmpty()
+        if (spiBody.isEmpty()) return
+        val json = runCatching { JSONObject(spiBody) }.getOrNull() ?: return
+        val data = json.optJSONObject("data") ?: return
+        val buvid3 = data.optString("b_3", "")
+        val buvid4 = data.optString("b_4", "")
+        if (buvid3.isEmpty() && buvid4.isEmpty()) return
+        val now = System.currentTimeMillis()
+        val cookies = mutableListOf<AuthCookie>()
+        if (buvid3.isNotEmpty()) {
+            cookies.add(
+                AuthCookie(
+                    name = "buvid3",
+                    value = buvid3,
+                    domain = "bilibili.com",
+                    path = "/",
+                    hostOnly = false,
+                    persistent = true,
+                    expiresAt = now + 365L * 24 * 60 * 60 * 1000
+                )
+            )
+        }
+        if (buvid4.isNotEmpty()) {
+            cookies.add(
+                AuthCookie(
+                    name = "buvid4",
+                    value = buvid4,
+                    domain = "bilibili.com",
+                    path = "/",
+                    hostOnly = false,
+                    persistent = true,
+                    expiresAt = now + 365L * 24 * 60 * 60 * 1000
+                )
+            )
+        }
+        if (cookies.isNotEmpty()) {
+            TokenManager.updateCookies(AppRuntime.appContext, cookies)
+        }
+    }
+
+    private suspend fun fetchAllLiveUsers(): List<LiveUserItem> {
         val accumulated = mutableListOf<LiveUserItem>()
         var page = 1
         var continueFetching = true
         while (continueFetching) {
-            val response = awaitCall(RetrofitClient.liveApiService.getLiveUsers(cookie, page, 20))
+            val response = awaitCall(RetrofitClient.liveApiService.getLiveUsers(page, 20))
             if (!response.isSuccessful) {
                 throw IOException("网络请求失败：${response.code()}")
             }
@@ -93,12 +201,6 @@ class MainRepository(private val context: Context) {
         return PageResult(shouldContinueFetching, data.totalPage)
     }
 
-    private fun buildCookie(): String {
-        val sessData = TokenManager.getSessData(context)
-            ?: throw IOException("未登录")
-        return "SESSDATA=$sessData"
-    }
-
     private suspend fun <T> awaitCall(call: Call<T>): Response<T> = suspendCoroutine { continuation ->
         call.enqueue(object : Callback<T> {
             override fun onResponse(call: Call<T>, response: Response<T>) {
@@ -118,5 +220,10 @@ class MainRepository(private val context: Context) {
     private data class PageResult(
         val shouldContinue: Boolean,
         val totalPage: Int
+    )
+
+    private data class RecommendCache(
+        val rooms: List<LiveRoom>,
+        val savedAt: Long
     )
 }

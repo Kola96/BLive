@@ -24,13 +24,15 @@ class MainViewModel(
     fun syncLoginState(isLoggedIn: Boolean) {
         if (!isLoggedIn) {
             _screenState.value = MainScreenState(
-                isLoggedIn = false,
-                liveListState = LiveListState.Loading
+                isLoggedIn = false
             )
             return
         }
         _screenState.update {
-            it.copy(isLoggedIn = true)
+            it.copy(
+                isLoggedIn = true,
+                selectedTab = MainTabType.Following
+            )
         }
     }
 
@@ -38,26 +40,62 @@ class MainViewModel(
         _screenState.update {
             it.copy(
                 isLoggedIn = true,
-                liveListState = LiveListState.Loading
+                selectedTab = MainTabType.Following,
+                followingListState = LiveListState.Loading
             )
         }
         loadUserProfile()
-        refreshLiveRooms()
+        refreshFollowingRooms()
+    }
+
+    fun switchTab(tab: MainTabType) {
+        val state = _screenState.value
+        if (!state.isLoggedIn || state.selectedTab == tab) {
+            return
+        }
+        _screenState.update { it.copy(selectedTab = tab) }
+        if (tab == MainTabType.Recommend) {
+            if (state.recommendRooms.isEmpty()) {
+                val cachedRooms = repository.getCachedRecommendRooms()
+                if (cachedRooms.isNotEmpty()) {
+                    _screenState.update {
+                        it.copy(
+                            recommendRooms = cachedRooms,
+                            recommendListState = LiveListState.Content
+                        )
+                    }
+                }
+            }
+            refreshRecommendRooms(preferCache = true)
+        } else if (_screenState.value.followingRooms.isEmpty()) {
+            refreshFollowingRooms()
+        }
+    }
+
+    fun refreshCurrentTab(force: Boolean = false) {
+        when (_screenState.value.selectedTab) {
+            MainTabType.Following -> refreshFollowingRooms(force)
+            MainTabType.Recommend -> refreshRecommendRooms(force = force, preferCache = false)
+        }
     }
 
     fun refreshLiveRooms(force: Boolean = false) {
+        refreshCurrentTab(force)
+    }
+
+    fun refreshFollowingRooms(force: Boolean = false) {
         val state = _screenState.value
         if (!state.isLoggedIn) {
             return
         }
-        if (state.isLoadingLiveList && !force) {
-            emitToast("正在刷新直播间列表...")
+        if (state.isLoadingFollowing && !force) {
+            emitToast("正在刷新关注直播间...")
             return
         }
         _screenState.update {
             it.copy(
-                isLoadingLiveList = true,
-                liveListState = LiveListState.Loading
+                isLoadingFollowing = true,
+                followingListState = LiveListState.Loading
             )
         }
         viewModelScope.launch {
@@ -65,20 +103,69 @@ class MainViewModel(
             result.onSuccess { rooms ->
                 _screenState.update {
                     it.copy(
-                        liveRooms = rooms,
-                        liveListState = if (rooms.isEmpty()) LiveListState.Empty else LiveListState.Content,
-                        isLoadingLiveList = false
+                        followingRooms = rooms,
+                        followingListState = if (rooms.isEmpty()) LiveListState.Empty else LiveListState.Content,
+                        isLoadingFollowing = false
                     )
                 }
             }.onFailure { error ->
                 _screenState.update {
                     it.copy(
-                        liveRooms = emptyList(),
-                        liveListState = LiveListState.Error,
-                        isLoadingLiveList = false
+                        followingRooms = emptyList(),
+                        followingListState = LiveListState.Error,
+                        isLoadingFollowing = false
                     )
                 }
                 emitToast("网络连接错误：${error.message}")
+            }
+        }
+    }
+
+    fun refreshRecommendRooms(
+        force: Boolean = false,
+        preferCache: Boolean = true
+    ) {
+        val state = _screenState.value
+        if (!state.isLoggedIn) {
+            return
+        }
+        if (state.isLoadingRecommend && !force) {
+            emitToast("正在刷新推荐直播间...")
+            return
+        }
+        if (preferCache && state.recommendRooms.isNotEmpty()) {
+            _screenState.update {
+                it.copy(
+                    recommendListState = LiveListState.Content
+                )
+            }
+        } else {
+            _screenState.update {
+                it.copy(recommendListState = LiveListState.Loading)
+            }
+        }
+        _screenState.update {
+            it.copy(isLoadingRecommend = true)
+        }
+        viewModelScope.launch {
+            val result = repository.fetchRecommendRooms()
+            result.onSuccess { rooms ->
+                _screenState.update {
+                    it.copy(
+                        recommendRooms = rooms,
+                        recommendListState = if (rooms.isEmpty()) LiveListState.Empty else LiveListState.Content,
+                        isLoadingRecommend = false
+                    )
+                }
+            }.onFailure { error ->
+                _screenState.update {
+                    it.copy(
+                        recommendRooms = emptyList(),
+                        recommendListState = LiveListState.Error,
+                        isLoadingRecommend = false
+                    )
+                }
+                emitToast("加载推荐直播间失败：${error.message}")
             }
         }
     }

@@ -18,6 +18,7 @@ import com.blive.tv.ui.main.LiveListState
 import com.blive.tv.ui.main.LiveRoom
 import com.blive.tv.ui.main.LiveRoomAdapter
 import com.blive.tv.ui.main.MainFocusNavigator
+import com.blive.tv.ui.main.MainTabType
 import com.blive.tv.ui.main.MainRepository
 import com.blive.tv.ui.main.MainUiRenderer
 import com.blive.tv.ui.main.MainViewModel
@@ -32,7 +33,7 @@ import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
     private val viewModel: MainViewModel by viewModels {
-        MainViewModelFactory(MainRepository(applicationContext))
+        MainViewModelFactory(MainRepository())
     }
 
     private lateinit var viewRefs: MainViewRefs
@@ -41,11 +42,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var liveRoomAdapter: LiveRoomAdapter
     private lateinit var userNicknameView: TextView
     private lateinit var userAvatarView: ImageView
+    private lateinit var followingTabView: TextView
+    private lateinit var recommendTabView: TextView
     private lateinit var loginButton: FrameLayout
 
     private var lastClickedRoomId: Long = -1L
     private var lastRenderedRoomKey: String = ""
     private var currentLiveListState: LiveListState = LiveListState.Loading
+    private var currentTab: MainTabType = MainTabType.Following
     private var lastBackPressedAt = 0L
     private val backPressExitWindowMs = 3000L
 
@@ -67,7 +71,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (keyCode == KeyEvent.KEYCODE_MENU && TokenManager.isLoggedIn(this)) {
-            viewModel.refreshLiveRooms()
+            viewModel.refreshCurrentTab()
             return true
         }
         if (keyCode == KeyEvent.KEYCODE_BACK) {
@@ -90,11 +94,14 @@ class MainActivity : AppCompatActivity() {
         val loadingContainer = findViewById<android.widget.LinearLayout>(R.id.live_list_loading_container)
         val emptyContainer = findViewById<android.widget.LinearLayout>(R.id.live_list_empty_container)
         val errorContainer = findViewById<android.widget.LinearLayout>(R.id.live_list_error_container)
+        val tabContainer = findViewById<android.widget.LinearLayout>(R.id.main_tab_container)
         val userAvatarContainer = findViewById<FrameLayout>(R.id.user_avatar_container)
         val emptyRefreshButton = findViewById<android.widget.ImageButton>(R.id.live_list_empty_refresh_button)
         val errorRefreshButton = findViewById<android.widget.ImageButton>(R.id.live_list_error_refresh_button)
         userNicknameView = findViewById(R.id.user_nickname)
         userAvatarView = findViewById(R.id.user_avatar)
+        followingTabView = findViewById(R.id.main_tab_following)
+        recommendTabView = findViewById(R.id.main_tab_recommend)
         loginButton = findViewById(R.id.login_button)
         viewRefs = MainViewRefs(
             userInfoContainer = userInfoContainer,
@@ -104,6 +111,9 @@ class MainActivity : AppCompatActivity() {
             emptyContainer = emptyContainer,
             errorContainer = errorContainer,
             userAvatarContainer = userAvatarContainer,
+            tabContainer = tabContainer,
+            followingTabView = followingTabView,
+            recommendTabView = recommendTabView,
             emptyRefreshButton = emptyRefreshButton,
             errorRefreshButton = errorRefreshButton
         )
@@ -112,7 +122,7 @@ class MainActivity : AppCompatActivity() {
     private fun initGrid() {
         liveRoomAdapter = LiveRoomAdapter(
             onFirstRowUp = {
-                focusNavigator.focusAvatar()
+                focusCurrentTab()
             },
             onRoomClicked = { roomId ->
                 lastClickedRoomId = roomId
@@ -124,7 +134,7 @@ class MainActivity : AppCompatActivity() {
         viewRefs.gridView.setScrollEnabled(true)
         viewRefs.gridView.isFocusable = true
         viewRefs.gridView.isFocusableInTouchMode = true
-        viewRefs.gridView.nextFocusUpId = R.id.user_avatar_container
+        viewRefs.gridView.nextFocusUpId = R.id.main_tab_following
     }
 
     private fun initControllers() {
@@ -143,10 +153,24 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, LoginActivity::class.java))
         }
         viewRefs.emptyRefreshButton.setOnClickListener {
-            viewModel.refreshLiveRooms()
+            viewModel.refreshCurrentTab()
         }
         viewRefs.errorRefreshButton.setOnClickListener {
-            viewModel.refreshLiveRooms()
+            viewModel.refreshCurrentTab()
+        }
+        followingTabView.setOnClickListener {
+            viewModel.switchTab(MainTabType.Following)
+        }
+        recommendTabView.setOnClickListener {
+            viewModel.switchTab(MainTabType.Recommend)
+        }
+        followingTabView.setOnKeyListener { _, keyCode, event ->
+            val keyEvent = event ?: return@setOnKeyListener false
+            handleTabKey(MainTabType.Following, keyCode, keyEvent)
+        }
+        recommendTabView.setOnKeyListener { _, keyCode, event ->
+            val keyEvent = event ?: return@setOnKeyListener false
+            handleTabKey(MainTabType.Recommend, keyCode, keyEvent)
         }
         viewRefs.userAvatarContainer.setOnClickListener {
             if (TokenManager.isLoggedIn(this)) {
@@ -166,16 +190,29 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     viewModel.screenState.collect { state ->
-                        currentLiveListState = state.liveListState
+                        currentTab = state.selectedTab
+                        val activeRooms = if (state.selectedTab == MainTabType.Following) {
+                            state.followingRooms
+                        } else {
+                            state.recommendRooms
+                        }
+                        val activeListState = if (state.selectedTab == MainTabType.Following) {
+                            state.followingListState
+                        } else {
+                            state.recommendListState
+                        }
+                        currentLiveListState = activeListState
                         uiRenderer.renderLoginState(state.isLoggedIn)
+                        uiRenderer.renderTabState(state.selectedTab)
+                        updateGridNextFocusUp(state.selectedTab)
                         if (!state.isLoggedIn) {
                             requestLoginButtonFocus()
                         }
                         bindUserProfile(state.userProfile)
-                        liveRoomAdapter.updateData(state.liveRooms)
-                        uiRenderer.renderLiveListState(state.liveListState)
-                        if (state.liveListState == LiveListState.Content) {
-                            restoreGridFocus(state.liveRooms)
+                        liveRoomAdapter.updateData(activeRooms)
+                        uiRenderer.renderLiveListState(activeListState)
+                        if (activeListState == LiveListState.Content) {
+                            restoreGridFocus(activeRooms)
                         } else {
                             lastRenderedRoomKey = ""
                         }
@@ -233,6 +270,79 @@ class MainActivity : AppCompatActivity() {
         }, 200)
     }
 
+    private fun handleTabKey(tabType: MainTabType, keyCode: Int, event: KeyEvent): Boolean {
+        if (event.action != KeyEvent.ACTION_DOWN) {
+            return false
+        }
+        return when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                if (tabType == MainTabType.Recommend) {
+                    viewModel.switchTab(MainTabType.Following)
+                    followingTabView.requestFocus()
+                    true
+                } else {
+                    false
+                }
+            }
+
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (tabType == MainTabType.Following) {
+                    viewModel.switchTab(MainTabType.Recommend)
+                    recommendTabView.requestFocus()
+                    true
+                } else {
+                    false
+                }
+            }
+
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                moveFocusFromTabToContent()
+                true
+            }
+
+            else -> false
+        }
+    }
+
+    private fun moveFocusFromTabToContent() {
+        when (currentLiveListState) {
+            LiveListState.Content -> {
+                if (liveRoomAdapter.itemCount <= 0) {
+                    return
+                }
+                viewRefs.gridView.scrollToPosition(0)
+                viewRefs.gridView.post {
+                    val holder = viewRefs.gridView.findViewHolderForAdapterPosition(0)
+                    if (holder != null) {
+                        holder.itemView.requestFocus()
+                    } else {
+                        viewRefs.gridView.getChildAt(0)?.requestFocus()
+                    }
+                }
+            }
+
+            LiveListState.Empty -> viewRefs.emptyRefreshButton.requestFocus()
+            LiveListState.Error -> viewRefs.errorRefreshButton.requestFocus()
+            LiveListState.Loading -> Unit
+        }
+    }
+
+    private fun focusCurrentTab() {
+        if (currentTab == MainTabType.Following) {
+            followingTabView.requestFocus()
+        } else {
+            recommendTabView.requestFocus()
+        }
+    }
+
+    private fun updateGridNextFocusUp(selectedTab: MainTabType) {
+        viewRefs.gridView.nextFocusUpId = if (selectedTab == MainTabType.Following) {
+            R.id.main_tab_following
+        } else {
+            R.id.main_tab_recommend
+        }
+    }
+
     private fun refreshByLoginState() {
         val isLoggedIn = TokenManager.isLoggedIn(this)
         viewModel.syncLoginState(isLoggedIn)
@@ -254,7 +364,9 @@ class MainActivity : AppCompatActivity() {
         popupMenu.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 0 -> {
-                    SettingsDialogFragment().show(supportFragmentManager, "settings")
+                    if (!supportFragmentManager.isStateSaved && !isFinishing && !isDestroyed) {
+                        SettingsDialogFragment().show(supportFragmentManager, "settings")
+                    }
                     true
                 }
 
