@@ -1,95 +1,136 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="10dp"
     android:focusable="true"
     android:focusableInTouchMode="true"
-    android:background="@drawable/card_focused_background">
+    android:stateListAnimator="@animator/card_focus_animator"
+    android:paddingBottom="12dp">
 
-    <!-- 相对布局容器：固定高度 220dp -->
-    <RelativeLayout
-        android:layout_width="match_parent"
-        android:layout_height="220dp"
-        android:layout_margin="4dp"
-        android:background="@android:color/black">
+    <!-- Foreground focused border -->
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@drawable/card_focused_background"
+        app:layout_constraintTop_toTopOf="@id/cover_container"
+        app:layout_constraintBottom_toBottomOf="@id/cover_container"
+        app:layout_constraintStart_toStartOf="@id/cover_container"
+        app:layout_constraintEnd_toEndOf="@id/cover_container"
+        android:elevation="4dp" />
 
-        <!-- 直播封面 704*396 比例 -->
-        <ImageView
-            android:id="@+id/cover_image"
+    <!-- 封面区域 (圆角 16:9) -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cover_container"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintDimensionRatio="16:9"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp"
+        app:cardBackgroundColor="#2b2c38">
+
+        <RelativeLayout
             android:layout_width="match_parent"
-            android:layout_height="140dp"
-            android:scaleType="centerCrop"
-            android:background="@android:color/darker_gray" />
+            android:layout_height="match_parent">
 
-        <!-- 渐变遮罩层 -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="50dp"
-            android:layout_alignBottom="@id/cover_image"
-            android:background="@drawable/gradient_mask"
-            android:alpha="0.7" />
+            <!-- 直播封面 -->
+            <ImageView
+                android:id="@+id/cover_image"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:background="@android:color/darker_gray" />
 
-        <!-- 主播头像 -->
-        <ImageView
-            android:id="@+id/anchor_avatar"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_alignParentLeft="true"
-            android:layout_alignBottom="@id/cover_image"
-            android:layout_marginLeft="10dp"
-            android:layout_marginBottom="10dp"
-            android:scaleType="centerCrop"
-            android:elevation="4dp"
-            android:src="@android:drawable/ic_media_play" />
+            <!-- 渐变遮罩层 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:layout_alignParentBottom="true"
+                android:background="@drawable/gradient_mask"
+                android:alpha="0.8" />
 
-        <!-- 主播名称 -->
-        <TextView
-            android:id="@+id/anchor_name"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_toRightOf="@id/anchor_avatar"
-            android:layout_alignBottom="@id/cover_image"
-            android:layout_marginBottom="14dp"
-            android:layout_marginLeft="8dp"
-            android:textColor="@android:color/white"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:maxLines="1"
-            android:ellipsize="end" />
+            <!-- 底部左侧：主播信息 -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_alignParentBottom="true"
+                android:layout_alignParentStart="true"
+                android:layout_marginStart="12dp"
+                android:layout_marginBottom="12dp"
+                android:gravity="center_vertical">
 
-        <!-- 直播间标题：位于封面下方 12dp -->
-        <TextView
-            android:id="@+id/room_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_below="@id/cover_image"
-            android:layout_marginTop="12dp"
-            android:layout_marginLeft="10dp"
-            android:layout_marginRight="10dp"
-            android:textColor="@android:color/white"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:maxLines="1"
-            android:ellipsize="end" />
+                <TextView
+                    android:id="@+id/anchor_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@android:color/white"
+                    android:textSize="@dimen/live_card_anchor_text_size"
+                    android:textStyle="bold"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+            </LinearLayout>
 
-        <!-- 直播间分区：位于底部 12dp -->
-        <TextView
-            android:id="@+id/area_name"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentBottom="true"
-            android:layout_marginBottom="12dp"
-            android:layout_marginLeft="10dp"
-            android:textColor="@android:color/white"
-            android:textSize="10sp"
-            android:background="@drawable/rounded_tag"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="3dp"
-            android:backgroundTint="#2b2c38"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:gravity="center"
-            android:alpha="0.9" />
-    </RelativeLayout>
-</FrameLayout>
+            <LinearLayout
+                android:id="@+id/viewer_count_container"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_alignParentBottom="true"
+                android:layout_alignParentEnd="true"
+                android:layout_marginEnd="12dp"
+                android:layout_marginBottom="12dp"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_lucide_eye"
+                    android:tint="#FFFFFF" />
+
+                <TextView
+                    android:id="@+id/viewer_count_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="10.5万"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </RelativeLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- 直播间标题 -->
+    <TextView
+        android:id="@+id/room_title"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/live_card_title_height"
+        app:layout_constraintTop_toBottomOf="@id/cover_container"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="@dimen/live_card_title_margin_top"
+        android:layout_marginHorizontal="4dp"
+        android:gravity="top"
+        android:includeFontPadding="false"
+        android:textColor="@android:color/white"
+        android:textSize="@dimen/live_card_title_text_size"
+        android:textStyle="bold"
+        android:maxLines="2"
+        android:ellipsize="end" />
+
+    <!-- 隐藏的原有分区标签 -->
+    <TextView
+        android:id="@+id/area_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toBottomOf="@id/room_title"
+        app:layout_constraintStart_toStartOf="parent"
+        android:visibility="gone" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

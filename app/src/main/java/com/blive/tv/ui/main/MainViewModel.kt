@@ -1,5 +1,6 @@
 package com.blive.tv.ui.main
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -24,14 +25,15 @@ class MainViewModel(
     fun syncLoginState(isLoggedIn: Boolean) {
         if (!isLoggedIn) {
             _screenState.value = MainScreenState(
-                isLoggedIn = false
+                isLoggedIn = false,
+                selectedTab = MainTabType.Login
             )
             return
         }
         _screenState.update {
             it.copy(
                 isLoggedIn = true,
-                selectedTab = MainTabType.Following
+                selectedTab = if (it.selectedTab == MainTabType.Login) MainTabType.Recommend else it.selectedTab
             )
         }
     }
@@ -40,42 +42,41 @@ class MainViewModel(
         _screenState.update {
             it.copy(
                 isLoggedIn = true,
-                selectedTab = MainTabType.Following,
-                followingListState = LiveListState.Loading
+                selectedTab = MainTabType.Recommend,
+                recommendListState = LiveListState.Loading
             )
         }
         loadUserProfile()
-        refreshFollowingRooms()
+        refreshRecommendRooms(force = true)
+    }
+
+    fun refreshAfterResume() {
+        if (!_screenState.value.isLoggedIn) {
+            return
+        }
+        loadUserProfile()
+        refreshCurrentTab()
     }
 
     fun switchTab(tab: MainTabType) {
         val state = _screenState.value
-        if (!state.isLoggedIn || state.selectedTab == tab) {
+        if (!state.isLoggedIn && tab != MainTabType.Login) {
+            return
+        }
+        if (state.selectedTab == tab) {
             return
         }
         _screenState.update { it.copy(selectedTab = tab) }
-        if (tab == MainTabType.Recommend) {
-            if (state.recommendRooms.isEmpty()) {
-                val cachedRooms = repository.getCachedRecommendRooms()
-                if (cachedRooms.isNotEmpty()) {
-                    _screenState.update {
-                        it.copy(
-                            recommendRooms = cachedRooms,
-                            recommendListState = LiveListState.Content
-                        )
-                    }
-                }
-            }
-            refreshRecommendRooms(preferCache = true)
-        } else if (_screenState.value.followingRooms.isEmpty()) {
-            refreshFollowingRooms()
+        if (tab == MainTabType.Recommend || tab == MainTabType.Following) {
+            refreshCurrentTab(force = true)
         }
     }
 
     fun refreshCurrentTab(force: Boolean = false) {
         when (_screenState.value.selectedTab) {
             MainTabType.Following -> refreshFollowingRooms(force)
-            MainTabType.Recommend -> refreshRecommendRooms(force = force, preferCache = false)
+            MainTabType.Recommend -> refreshRecommendRooms(force)
+            else -> Unit
         }
     }
 
@@ -121,10 +122,7 @@ class MainViewModel(
         }
     }
 
-    fun refreshRecommendRooms(
-        force: Boolean = false,
-        preferCache: Boolean = true
-    ) {
+    fun refreshRecommendRooms(force: Boolean = false) {
         val state = _screenState.value
         if (!state.isLoggedIn) {
             return
@@ -133,27 +131,22 @@ class MainViewModel(
             emitToast("正在刷新推荐直播间...")
             return
         }
-        if (preferCache && state.recommendRooms.isNotEmpty()) {
-            _screenState.update {
-                it.copy(
-                    recommendListState = LiveListState.Content
-                )
-            }
-        } else {
-            _screenState.update {
-                it.copy(recommendListState = LiveListState.Loading)
-            }
-        }
         _screenState.update {
-            it.copy(isLoadingRecommend = true)
+            it.copy(
+                recommendListState = LiveListState.Loading,
+                isLoadingRecommend = true
+            )
         }
         viewModelScope.launch {
             val result = repository.fetchRecommendRooms()
             result.onSuccess { rooms ->
+                val normalizedRooms = rooms
+                    .filter { it.roomId > 0L }
+                    .distinctBy { it.roomId }
                 _screenState.update {
                     it.copy(
-                        recommendRooms = rooms,
-                        recommendListState = if (rooms.isEmpty()) LiveListState.Empty else LiveListState.Content,
+                        recommendRooms = normalizedRooms,
+                        recommendListState = if (normalizedRooms.isEmpty()) LiveListState.Empty else LiveListState.Content,
                         isLoadingRecommend = false
                     )
                 }

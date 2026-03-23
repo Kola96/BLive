@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="main_logo_text_size">24sp</dimen>
+    <dimen name="main_tab_text_size">20sp</dimen>
+    <dimen name="main_page_title_text_size">28sp</dimen>
+    <dimen name="main_user_nickname_text_size">24sp</dimen>
+    <dimen name="main_action_button_text_size">18sp</dimen>
+
+    <dimen name="login_title_text_size">28sp</dimen>
+    <dimen name="login_status_text_size">16sp</dimen>
+    <dimen name="login_countdown_text_size">14sp</dimen>
+
+    <dimen name="live_card_anchor_text_size">14sp</dimen>
+    <dimen name="live_card_title_text_size">18sp</dimen>
+    <dimen name="live_card_title_height">54dp</dimen>
+    <dimen name="live_card_title_margin_top">12dp</dimen>
+</resources>

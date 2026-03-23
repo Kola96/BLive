@@ -45,6 +45,11 @@ interface ApiService {
         @QueryMap params: Map<String, String>
     ): Call<LiveRecommendResponse>
 
+    @GET("/room/v1/Room/get_info")
+    fun getRoomBasicInfo(
+        @Query("room_id") roomId: Long
+    ): Call<RoomBasicInfoResponse>
+
     // 获取直播间播放信息
     @GET("/xlive/web-room/v2/index/getRoomPlayInfo")
     fun getRoomPlayInfo(

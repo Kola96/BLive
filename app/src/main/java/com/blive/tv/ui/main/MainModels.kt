@@ -6,12 +6,16 @@ data class LiveRoom(
     val anchorName: String,
     val anchorAvatar: String,
     val roomTitle: String,
-    val areaName: String
+    val areaName: String,
+    val viewerCount: Long = 0L,
+    val viewerCountText: String? = null
 )
 
 data class UserProfile(
     val nickname: String,
-    val avatarUrl: String
+    val avatarUrl: String,
+    val vipLabel: String? = null,
+    val level: Int = 0
 )
 
 enum class LiveListState {
@@ -22,14 +26,17 @@ enum class LiveListState {
 }
 
 enum class MainTabType {
+    Login,
+    Mine,
+    Recommend,
     Following,
-    Recommend
+    Partition
 }
 
 data class MainScreenState(
     val isLoggedIn: Boolean = false,
     val userProfile: UserProfile? = null,
-    val selectedTab: MainTabType = MainTabType.Following,
+    val selectedTab: MainTabType = MainTabType.Login,
     val followingRooms: List<LiveRoom> = emptyList(),
     val recommendRooms: List<LiveRoom> = emptyList(),
     val followingListState: LiveListState = LiveListState.Loading,

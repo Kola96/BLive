@@ -16,7 +16,14 @@ data class UserInfoData(
     @SerializedName("face") val face: String,
     @SerializedName("uname") val uname: String,
     @SerializedName("mid") val mid: Long,
+    @SerializedName("vipStatus") val vipStatus: Int = 0,
+    @SerializedName("vipType") val vipType: Int = 0,
+    @SerializedName("level_info") val levelInfo: LevelInfoData? = null,
     @SerializedName("wbi_img") val wbiImg: WbiImgData? = null
+)
+
+data class LevelInfoData(
+    @SerializedName("current_level") val currentLevel: Int = 0
 )
 
 data class WbiImgData(

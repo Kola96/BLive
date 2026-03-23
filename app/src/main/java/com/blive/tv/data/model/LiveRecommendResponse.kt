@@ -25,7 +25,13 @@ data class RecommendRoomItem(
     @SerializedName("cover") val cover: String = "",
     @SerializedName("area_name") val areaName: String = "",
     @SerializedName("area_v2_name") val areaV2Name: String = "",
-    @SerializedName("live_status") val liveStatus: Int = 0
+    @SerializedName("live_status") val liveStatus: Int = 0,
+    @SerializedName("online") val online: Long = 0L,
+    @SerializedName("watched_show") val watchedShow: WatchedShowData? = null
+)
+
+data class WatchedShowData(
+    @SerializedName("text_small") val textSmall: String = ""
 )
 
 fun RecommendRoomItem.toLiveRoom(): LiveRoom {
@@ -42,6 +48,8 @@ fun RecommendRoomItem.toLiveRoom(): LiveRoom {
         anchorName = uname,
         anchorAvatar = face,
         roomTitle = title,
-        areaName = area
+        areaName = area,
+        viewerCount = online,
+        viewerCountText = watchedShow?.textSmall?.takeIf { it.isNotBlank() }
     )
 }

@@ -27,5 +27,7 @@ data class LiveUserItem(
     @SerializedName("face") val face: String,
     @SerializedName("live_status") val liveStatus: Int,
     @SerializedName("room_cover") val roomCover: String,
-    @SerializedName("area_name_v2") val areaNameV2: String
+    @SerializedName("area_name_v2") val areaNameV2: String,
+    @SerializedName("online") val online: Long = 0L,
+    @SerializedName("text_small") val textSmall: String = ""
 )

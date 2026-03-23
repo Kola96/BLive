@@ -13,6 +13,8 @@ import com.blive.tv.utils.TokenManager
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import retrofit2.Call
@@ -23,8 +25,6 @@ import java.util.concurrent.CancellationException
 import kotlin.coroutines.suspendCoroutine
 
 class MainRepository {
-    private var recommendCache: RecommendCache? = null
-
     suspend fun fetchUserProfile(): Result<UserProfile> = withContext(Dispatchers.IO) {
         runCatching {
             val response = awaitCall(RetrofitClient.apiService.getNavInfo())
@@ -37,7 +37,9 @@ class MainRepository {
             }
             UserProfile(
                 nickname = body.data.uname,
-                avatarUrl = body.data.face
+                avatarUrl = body.data.face,
+                vipLabel = resolveVipLabel(body.data.vipStatus, body.data.vipType),
+                level = body.data.levelInfo?.currentLevel ?: 0
             )
         }
     }
@@ -45,27 +47,23 @@ class MainRepository {
     suspend fun fetchLiveRooms(): Result<List<LiveRoom>> = withContext(Dispatchers.IO) {
         runCatching {
             val liveUsers = fetchAllLiveUsers()
-            liveUsers.map { item ->
+            val rooms = liveUsers.map { item ->
                 LiveRoom(
                     roomId = item.roomId,
                     coverUrl = item.roomCover,
                     anchorName = item.uname,
                     anchorAvatar = item.face,
                     roomTitle = item.title,
-                    areaName = item.areaNameV2
+                    areaName = item.areaNameV2,
+                    viewerCount = item.online,
+                    viewerCountText = item.textSmall.ifBlank { null }
                 )
             }
+            rooms
         }
     }
 
-    fun getCachedRecommendRooms(): List<LiveRoom> {
-        return recommendCache?.rooms.orEmpty()
-    }
-
-    suspend fun fetchRecommendRooms(
-        page: Int = 1,
-        pageSize: Int = 30
-    ): Result<List<LiveRoom>> = withContext(Dispatchers.IO) {
+    suspend fun fetchRecommendRooms(): Result<List<LiveRoom>> = withContext(Dispatchers.IO) {
         runCatching {
             ensureSpiCookies()
             val allPageResponse = awaitCall(RetrofitClient.liveWebApiService.getLiveAllPageRaw())
@@ -92,28 +90,54 @@ class MainRepository {
             if (imgKey.isEmpty() || subKey.isEmpty()) {
                 throw IOException("解析WBI密钥失败")
             }
-            val unsignedParams = mutableMapOf(
-                "page" to page.toString(),
-                "page_size" to pageSize.toString(),
-                "platform" to "web",
-                "web_location" to "444.253",
-                "w_webid" to wWebId
-            )
-            val (wRid, wts) = WbiSigner.sign(unsignedParams, imgKey, subKey)
-            val requestParams = unsignedParams.toMutableMap()
-            requestParams["w_rid"] = wRid
-            requestParams["wts"] = wts
-            val recommendResponse = awaitCall(RetrofitClient.liveApiService.getUserRecommend(requestParams))
-            if (!recommendResponse.isSuccessful) {
-                throw IOException("获取推荐直播间失败：${recommendResponse.code()}")
+
+            val (rooms1, rooms2) = coroutineScope {
+                val deferred1 = async {
+                    fetchSinglePageRecommend(1, 50, wWebId, imgKey, subKey)
+                }
+                val deferred2 = async {
+                    fetchSinglePageRecommend(2, 50, wWebId, imgKey, subKey)
+                }
+                Pair(deferred1.await(), deferred2.await())
             }
-            val recommendBody = recommendResponse.body() ?: throw IOException("推荐直播间响应为空")
-            if (recommendBody.code != 0) {
-                throw IOException(recommendBody.message.ifEmpty { "获取推荐直播间失败" })
-            }
-            val rooms = recommendBody.data?.list.orEmpty().map { it.toLiveRoom() }
-            recommendCache = RecommendCache(rooms = rooms, savedAt = System.currentTimeMillis())
-            rooms
+
+            (rooms1 + rooms2).distinctBy { it.roomId }
+        }
+    }
+
+    private suspend fun fetchSinglePageRecommend(
+        page: Int,
+        pageSize: Int,
+        wWebId: String,
+        imgKey: String,
+        subKey: String
+    ): List<LiveRoom> {
+        val unsignedParams = mutableMapOf(
+            "page" to page.toString(),
+            "page_size" to pageSize.toString(),
+            "platform" to "web",
+            "web_location" to "444.253",
+            "w_webid" to wWebId
+        )
+        val (wRid, wts) = WbiSigner.sign(unsignedParams, imgKey, subKey)
+        val requestParams = unsignedParams.toMutableMap()
+        requestParams["w_rid"] = wRid
+        requestParams["wts"] = wts
+        val response = awaitCall(RetrofitClient.liveApiService.getUserRecommend(requestParams))
+        if (!response.isSuccessful) return emptyList()
+        val body = response.body() ?: return emptyList()
+        if (body.code != 0) return emptyList()
+        return body.data?.list.orEmpty().map { it.toLiveRoom() }
+    }
+
+    private fun resolveVipLabel(vipStatus: Int, vipType: Int): String? {
+        if (vipStatus != 1) {
+            return null
+        }
+        return when (vipType) {
+            2 -> "年度大会员"
+            1 -> "大会员"
+            else -> null
         }
     }
 
@@ -220,10 +244,5 @@ class MainRepository {
     private data class PageResult(
         val shouldContinue: Boolean,
         val totalPage: Int
-    )
-
-    private data class RecommendCache(
-        val rooms: List<LiveRoom>,
-        val savedAt: Long
     )
 }
