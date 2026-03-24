@@ -7,19 +7,19 @@ plugins {
 project.buildDir = 'build'
 
 android {
-    namespace "com.blive.tv"
-    compileSdk 34
+    namespace = "com.blive.tv"
+    compileSdk = 34
 
     defaultConfig {
-        applicationId "com.blive.tv"
-        minSdk 21
-        targetSdk 34
-        versionCode 4
-        versionName "0.3.1"
+        applicationId = "com.blive.tv"
+        minSdk = 21
+        targetSdk = 34
+        versionCode = 4
+        versionName = "0.3.1"
 
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
-            useSupportLibrary true
+            useSupportLibrary = true
         }
     }
 
@@ -44,23 +44,23 @@ android {
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
-            minifyEnabled false
+            signingConfig = signingConfigs.release
+            minifyEnabled = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
         jvmTarget = '17'
     }
     buildFeatures {
-        compose true
+        compose = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion '1.5.4'
+        kotlinCompilerExtensionVersion = '1.5.4'
     }
     packaging {
         resources {
