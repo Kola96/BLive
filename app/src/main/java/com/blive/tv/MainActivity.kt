@@ -1,12 +1,15 @@
 package com.blive.tv
 
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewParent
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -28,6 +31,7 @@ import com.blive.tv.ui.main.LiveListState
 import com.blive.tv.ui.main.LiveRoom
 import com.blive.tv.ui.main.LiveRoomAdapter
 import com.blive.tv.ui.main.MainFocusNavigator
+import com.blive.tv.ui.main.MainScreenState
 import com.blive.tv.ui.main.MainTabType
 import com.blive.tv.ui.main.MainRepository
 import com.blive.tv.ui.main.MainUiRenderer
@@ -44,6 +48,11 @@ import com.google.zxing.WriterException
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
+    private data class GridRestoreState(
+        val position: Int = 0,
+        val roomId: Long? = null
+    )
+
     private val viewModel: MainViewModel by viewModels {
         MainViewModelFactory(MainRepository())
     }
@@ -78,12 +87,16 @@ class MainActivity : AppCompatActivity() {
     private var lastAdapterDataKey: String = ""
     private var currentLiveListState: LiveListState = LiveListState.Loading
     private var currentTab: MainTabType = MainTabType.Login
+    private val tabGridRestoreStates = mutableMapOf(
+        MainTabType.Recommend to GridRestoreState(),
+        MainTabType.Following to GridRestoreState()
+    )
+    private var pendingGridRestoreTab: MainTabType? = null
     private var lastPlayEntryTab: MainTabType? = null
     private var lastPlayEntryRoomId: Long = -1L
     private var pendingRestoreFromPlay: Boolean = false
     private var pendingRestoreFollowingRoom: Boolean = false
     private var pendingRestoreRecommendTab: Boolean = false
-    private val gridColumnCount = 5
     private var lastBackPressedAt = 0L
     private val backPressExitWindowMs = 3000L
     private val livePlayLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -128,11 +141,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initViews() {
-        val tabLogin = findViewById<TextView>(R.id.tab_login)
-        val tabMine = findViewById<TextView>(R.id.tab_mine)
-        val tabRecommend = findViewById<TextView>(R.id.tab_recommend)
-        val tabFollowing = findViewById<TextView>(R.id.tab_following)
-        val tabPartition = findViewById<TextView>(R.id.tab_partition)
+        val tabLogin = findViewById<View>(R.id.tab_login)
+        val tabMine = findViewById<View>(R.id.tab_mine)
+        val tabRecommend = findViewById<View>(R.id.tab_recommend)
+        val tabFollowing = findViewById<View>(R.id.tab_following)
+        val tabPartition = findViewById<View>(R.id.tab_partition)
+        val tabFocusSlider = findViewById<View>(R.id.tab_focus_slider)
 
         val loginContainer = findViewById<View>(R.id.login_container)
         val mineContainer = findViewById<View>(R.id.mine_container)
@@ -164,6 +178,7 @@ class MainActivity : AppCompatActivity() {
             tabRecommend = tabRecommend,
             tabFollowing = tabFollowing,
             tabPartition = tabPartition,
+            tabFocusSlider = tabFocusSlider,
             loginContainer = loginContainer,
             mineContainer = mineContainer,
             gridContainer = gridContainer,
@@ -178,7 +193,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initGrid() {
+        val gridColumnCount = resolveGridColumnCount()
         liveRoomAdapter = LiveRoomAdapter(
+            columnCount = gridColumnCount,
             onFirstRowUp = {
                 Unit
             },
@@ -186,11 +203,18 @@ class MainActivity : AppCompatActivity() {
                 lastClickedRoomId = roomId
                 lastPlayEntryTab = currentTab
                 lastPlayEntryRoomId = roomId
+                val clickedPosition = liveRoomAdapter.getPositionByRoomId(roomId)
+                if (clickedPosition >= 0) {
+                    updateGridRestoreState(currentTab, clickedPosition, roomId)
+                }
                 val intent = Intent(this, LivePlayActivity::class.java)
                 intent.putExtra("room_id", roomId)
                 livePlayLauncher.launch(intent)
             },
-            onNavigateToTab = { focusCurrentTab() }
+            onNavigateToTab = { focusCurrentTab() },
+            onRoomFocused = { position, roomId ->
+                updateGridRestoreState(currentTab, position, roomId)
+            }
         )
         viewRefs.gridView.adapter = liveRoomAdapter
         viewRefs.gridView.itemAnimator = null
@@ -199,6 +223,15 @@ class MainActivity : AppCompatActivity() {
         viewRefs.gridView.setScrollEnabled(true)
         viewRefs.gridView.isFocusable = true
         viewRefs.gridView.isFocusableInTouchMode = true
+    }
+
+    private fun resolveGridColumnCount(): Int {
+        val smallestScreenWidthDp = resources.configuration.smallestScreenWidthDp
+        return when {
+            smallestScreenWidthDp >= 960 -> 5
+            smallestScreenWidthDp >= 720 -> 4
+            else -> 3
+        }
     }
 
     private fun initControllers() {
@@ -231,16 +264,60 @@ class MainActivity : AppCompatActivity() {
         viewRefs.errorRefreshButton.setOnKeyListener(contentBackToTabHandler)
         
         val tabFocusHandler = View.OnFocusChangeListener { v, hasFocus ->
+            val iconView = (v as? android.view.ViewGroup)?.getChildAt(0)
+            val textView = (v as? android.view.ViewGroup)?.getChildAt(1)
+
             if (hasFocus) {
+                // 1. Icon/Text 切换动画: 从中间慢慢变大/缩小
+                iconView?.animate()?.scaleX(0f)?.scaleY(0f)?.alpha(0f)?.setDuration(200)?.withEndAction {
+                    iconView.visibility = View.INVISIBLE
+                }?.start()
+                
+                textView?.visibility = View.VISIBLE
+                textView?.scaleX = 0f
+                textView?.scaleY = 0f
+                textView?.alpha = 0f
+                textView?.animate()?.scaleX(1f)?.scaleY(1f)?.alpha(1f)?.setDuration(200)?.start()
+
+                // 2. 焦点滑块动画，使用 post 确保 View 已经完成布局和测量
+                v.post {
+                    animateTabSlider(v)
+                }
+
                 val viewName = runCatching { resources.getResourceEntryName(v.id) }.getOrDefault(v.id.toString())
                 Log.d("MainFocus", "Tab获得焦点 viewId=${v.id} name=$viewName")
-                when (v.id) {
-                    R.id.tab_login -> viewModel.switchTab(MainTabType.Login)
-                    R.id.tab_mine -> viewModel.switchTab(MainTabType.Mine)
-                    R.id.tab_recommend -> viewModel.switchTab(MainTabType.Recommend)
-                    R.id.tab_following -> viewModel.switchTab(MainTabType.Following)
-                    R.id.tab_partition -> viewModel.switchTab(MainTabType.Partition)
+                val targetTab = when (v.id) {
+                    R.id.tab_login -> MainTabType.Login
+                    R.id.tab_mine -> MainTabType.Mine
+                    R.id.tab_recommend -> MainTabType.Recommend
+                    R.id.tab_following -> MainTabType.Following
+                    R.id.tab_partition -> MainTabType.Partition
+                    else -> currentTab
                 }
+                if (targetTab != currentTab) {
+                    pendingGridRestoreTab = targetTab.takeIf { isLiveListTab(it) }
+                    viewModel.switchTab(targetTab)
+                }
+            } else {
+                 // 失去焦点时恢复 Icon 隐藏 Text
+                 iconView?.visibility = View.VISIBLE
+                 iconView?.scaleX = 0f
+                 iconView?.scaleY = 0f
+                 iconView?.alpha = 0f
+                 iconView?.animate()?.scaleX(1f)?.scaleY(1f)?.alpha(1f)?.setDuration(200)?.start()
+                 
+                 textView?.animate()?.scaleX(0f)?.scaleY(0f)?.alpha(0f)?.setDuration(200)?.withEndAction {
+                     textView.visibility = View.INVISIBLE
+                 }?.start()
+
+                // 检查是否所有 Tab 都失去了焦点，如果是则隐藏滑块
+                v.postDelayed({
+                    val currentFocus = currentFocus
+                    val tabs = listOf(viewRefs.tabLogin, viewRefs.tabMine, viewRefs.tabRecommend, viewRefs.tabFollowing, viewRefs.tabPartition)
+                    if (currentFocus !in tabs) {
+                        hideTabSlider()
+                    }
+                }, 50)
             }
         }
         viewRefs.tabLogin.onFocusChangeListener = tabFocusHandler
@@ -255,7 +332,12 @@ class MainActivity : AppCompatActivity() {
             }
             when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    focusNavigator.focusContent(currentLiveListState, currentTab, liveRoomAdapter.itemCount)
+                    focusNavigator.focusContent(
+                        state = currentLiveListState,
+                        tab = currentTab,
+                        gridItemCount = liveRoomAdapter.itemCount,
+                        targetPosition = resolveRestorePosition(currentTab, liveRoomAdapter.getCurrentData()) ?: 0
+                    )
                     true
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN -> moveTabFocus(v.id, moveDown = true)
@@ -313,18 +395,21 @@ class MainActivity : AppCompatActivity() {
                         bindUserProfile(state.userProfile)
                         
                         if (state.selectedTab == MainTabType.Recommend || state.selectedTab == MainTabType.Following) {
-                            val previousRoomCount = liveRoomAdapter.itemCount
+                            if (previousTab != state.selectedTab && activeListState == LiveListState.Content) {
+                                prepositionGrid(state.selectedTab, activeRooms)
+                            }
                             liveRoomAdapter.updateData(activeRooms)
                             uiRenderer.renderLiveListState(activeListState)
                             if (activeListState == LiveListState.Content) {
-                                // 只有在首次加载（从空变有）或发生完全不同的全量刷新时才需要主动恢复焦点。
-                                // 如果是分页追加（有旧数据且追加新数据），DiffUtil 会保持焦点，不需要 restoreGridFocus 强行抢占。
-                                if (previousRoomCount == 0 || lastRenderedRoomKey.isEmpty()) {
-                                    restoreGridFocus(activeRooms)
-                                } else {
-                                    // 仅更新 key，不强制移动焦点
-                                    lastRenderedRoomKey = activeRooms.joinToString(separator = ",") { it.roomId.toString() }
+                                val roomKey = buildRoomKey(activeRooms)
+                                val shouldRestoreGrid = previousTab != state.selectedTab ||
+                                    roomKey != lastRenderedRoomKey ||
+                                    pendingGridRestoreTab == state.selectedTab ||
+                                    pendingRestoreFollowingRoom
+                                if (shouldRestoreGrid) {
+                                    restoreGridFocus(state.selectedTab, activeRooms)
                                 }
+                                lastRenderedRoomKey = roomKey
                             } else {
                                 lastRenderedRoomKey = ""
                             }
@@ -419,30 +504,36 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun restoreGridFocus(liveRooms: List<LiveRoom>) {
+    private fun restoreGridFocus(tab: MainTabType, liveRooms: List<LiveRoom>) {
         if (liveRooms.isEmpty()) {
             return
         }
-        val roomKey = liveRooms.joinToString(separator = ",") { it.roomId.toString() }
-        if (roomKey == lastRenderedRoomKey) {
+        val targetPosition = resolveRestorePosition(tab, liveRooms)
+        if (targetPosition == null) {
+            if (tab == MainTabType.Following && pendingRestoreFollowingRoom) {
+                pendingRestoreFollowingRoom = false
+                viewRefs.tabFollowing.post { viewRefs.tabFollowing.requestFocus() }
+            }
             return
         }
-        lastRenderedRoomKey = roomKey
-        viewRefs.gridView.postDelayed({
-            var targetPosition = 0
-            if (lastClickedRoomId != -1L) {
-                val index = liveRooms.indexOfFirst { it.roomId == lastClickedRoomId }
-                if (index >= 0) {
-                    targetPosition = index
+        val targetRoomId = liveRooms.getOrNull(targetPosition)?.roomId
+        if (targetRoomId != null) {
+            updateGridRestoreState(tab, targetPosition, targetRoomId)
+        }
+        viewRefs.gridView.post {
+            viewRefs.gridView.setSelectedPosition(targetPosition)
+            if (pendingGridRestoreTab == tab) {
+                pendingGridRestoreTab = null
+            }
+            if (tab == MainTabType.Following && pendingRestoreFollowingRoom) {
+                pendingRestoreFollowingRoom = false
+            }
+            if (shouldRequestGridFocus() || (tab == MainTabType.Following && lastPlayEntryRoomId == targetRoomId)) {
+                viewRefs.gridView.post {
+                    viewRefs.gridView.findViewHolderForAdapterPosition(targetPosition)?.itemView?.requestFocus()
                 }
             }
-            viewRefs.gridView.setSelectedPosition(targetPosition)
-            if (shouldRequestGridFocus()) {
-                viewRefs.gridView.postDelayed({
-                    viewRefs.gridView.findViewHolderForAdapterPosition(targetPosition)?.itemView?.requestFocus()
-                }, 100)
-            }
-        }, 200)
+        }
     }
 
     private fun moveTabFocus(currentTabId: Int, moveDown: Boolean): Boolean {
@@ -497,6 +588,50 @@ class MainActivity : AppCompatActivity() {
         return false
     }
 
+    private fun isLiveListTab(tab: MainTabType): Boolean {
+        return tab == MainTabType.Recommend || tab == MainTabType.Following
+    }
+
+    private fun buildRoomKey(liveRooms: List<LiveRoom>): String {
+        return liveRooms.joinToString(separator = ",") { it.roomId.toString() }
+    }
+
+    private fun updateGridRestoreState(tab: MainTabType, position: Int, roomId: Long?) {
+        if (!isLiveListTab(tab) || position == RecyclerView.NO_POSITION || position < 0) {
+            return
+        }
+        tabGridRestoreStates[tab] = GridRestoreState(
+            position = position,
+            roomId = roomId
+        )
+    }
+
+    private fun resolveRestorePosition(tab: MainTabType, liveRooms: List<LiveRoom>): Int? {
+        if (liveRooms.isEmpty()) {
+            return null
+        }
+        if (tab == MainTabType.Following && pendingRestoreFollowingRoom) {
+            val playRestoreIndex = liveRooms.indexOfFirst { it.roomId == lastPlayEntryRoomId }
+            if (playRestoreIndex >= 0) {
+                return playRestoreIndex
+            }
+            return null
+        }
+        val restoreState = tabGridRestoreStates[tab] ?: GridRestoreState()
+        restoreState.roomId?.let { roomId ->
+            val matchedIndex = liveRooms.indexOfFirst { it.roomId == roomId }
+            if (matchedIndex >= 0) {
+                return matchedIndex
+            }
+        }
+        return restoreState.position.coerceIn(0, liveRooms.lastIndex)
+    }
+
+    private fun prepositionGrid(tab: MainTabType, liveRooms: List<LiveRoom>) {
+        val targetPosition = resolveRestorePosition(tab, liveRooms) ?: 0
+        viewRefs.gridView.scrollToPosition(targetPosition)
+    }
+
     private fun focusCurrentTab() {
         when (currentTab) {
             MainTabType.Login -> viewRefs.tabLogin.requestFocus()
@@ -507,28 +642,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun handlePendingPlayRestore(state: com.blive.tv.ui.main.MainScreenState) {
+    private fun handlePendingPlayRestore(state: MainScreenState) {
         if (pendingRestoreRecommendTab && state.selectedTab == MainTabType.Recommend) {
             pendingRestoreRecommendTab = false
             viewRefs.tabRecommend.post { viewRefs.tabRecommend.requestFocus() }
         }
         if (pendingRestoreFollowingRoom && state.selectedTab == MainTabType.Following) {
             when (state.followingListState) {
-                LiveListState.Content -> {
-                    val targetIndex = state.followingRooms.indexOfFirst { it.roomId == lastPlayEntryRoomId }
-                    pendingRestoreFollowingRoom = false
-                    if (targetIndex >= 0) {
-                        lastClickedRoomId = lastPlayEntryRoomId
-                        viewRefs.gridView.post {
-                            viewRefs.gridView.setSelectedPosition(targetIndex)
-                            viewRefs.gridView.postDelayed({
-                                viewRefs.gridView.findViewHolderForAdapterPosition(targetIndex)?.itemView?.requestFocus()
-                            }, 100)
-                        }
-                    } else {
-                        viewRefs.tabFollowing.post { viewRefs.tabFollowing.requestFocus() }
-                    }
-                }
+                LiveListState.Content -> Unit
                 LiveListState.Empty, LiveListState.Error -> {
                     pendingRestoreFollowingRoom = false
                     viewRefs.tabFollowing.post { viewRefs.tabFollowing.requestFocus() }
@@ -557,6 +678,65 @@ class MainActivity : AppCompatActivity() {
             }
             else -> Unit
         }
+    }
+
+    private fun animateTabSlider(targetView: View) {
+        val slider = viewRefs.tabFocusSlider
+        val container = findViewById<View>(R.id.main_tab_container)
+        
+        // 目标位置相对于滑块父容器 (FrameLayout)
+        val targetY = container.top + targetView.top
+        val targetX = container.left + targetView.left
+        val targetWidth = targetView.width
+        val targetHeight = targetView.height
+
+        slider.animate().cancel()
+        slider.alpha = 1f
+
+        if (slider.visibility != View.VISIBLE) {
+            slider.visibility = View.VISIBLE
+            // Ensure layout params are updated before translation
+            slider.layoutParams = (slider.layoutParams as FrameLayout.LayoutParams).apply {
+                width = targetWidth
+                height = targetHeight
+            }
+            slider.requestLayout()
+            
+            // Wait for layout update before setting translation to avoid incorrect positions
+            slider.post {
+                val updatedTargetY = container.top + targetView.top
+                val updatedTargetX = container.left + targetView.left
+                slider.translationX = updatedTargetX.toFloat()
+                slider.translationY = updatedTargetY.toFloat()
+            }
+        } else {
+            // 平滑移动到目标位置
+            slider.animate()
+                .translationY(targetY.toFloat())
+                .translationX(targetX.toFloat())
+                .setDuration(250)
+                .setInterpolator(AccelerateDecelerateInterpolator())
+                .start()
+            
+            // 如果宽度不一致（理论上一致），动画调整宽度
+            if (slider.width != targetWidth && targetWidth > 0) {
+                val animator = ValueAnimator.ofInt(slider.width, targetWidth)
+                animator.addUpdateListener { 
+                    slider.layoutParams.width = it.animatedValue as Int
+                    slider.requestLayout()
+                }
+                animator.duration = 250
+                animator.start()
+            }
+        }
+    }
+
+    private fun hideTabSlider() {
+        viewRefs.tabFocusSlider.animate()
+            .alpha(0f)
+            .setDuration(200)
+            .withEndAction { viewRefs.tabFocusSlider.visibility = View.INVISIBLE }
+            .start()
     }
 
     private fun refreshByLoginState(fromResume: Boolean = false) {

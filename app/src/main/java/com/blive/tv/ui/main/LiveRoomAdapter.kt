@@ -7,19 +7,19 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.util.Log
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.blive.tv.R
 import com.bumptech.glide.Glide
 
 class LiveRoomAdapter(
+    private var columnCount: Int,
     private val onFirstRowUp: (Int) -> Unit,
     private val onRoomClicked: (Long) -> Unit,
-    private val onNavigateToTab: () -> Unit
+    private val onNavigateToTab: () -> Unit,
+    private val onRoomFocused: (Int, Long) -> Unit
 ) : RecyclerView.Adapter<LiveRoomAdapter.LiveRoomViewHolder>() {
     private var liveRooms: List<LiveRoom> = emptyList()
-    private val columnCount = 5
 
     init {
         setHasStableIds(true)
@@ -83,7 +83,7 @@ class LiveRoomAdapter(
             itemView.setOnKeyListener { _, keyCode, event ->
                 if (event.action == KeyEvent.ACTION_DOWN) {
                     if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                        if (bindingAdapterPosition in 0..4) {
+                        if (bindingAdapterPosition in 0 until columnCount) {
                             onFirstRowUp(bindingAdapterPosition)
                             return@setOnKeyListener true
                         }
@@ -106,6 +106,16 @@ class LiveRoomAdapter(
                 if (pos in liveRooms.indices) {
                     val liveRoom = liveRooms[pos]
                     onRoomClicked(liveRoom.roomId)
+                }
+            }
+
+            itemView.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+                if (!hasFocus) {
+                    return@OnFocusChangeListener
+                }
+                val pos = bindingAdapterPosition
+                if (pos in liveRooms.indices) {
+                    onRoomFocused(pos, liveRooms[pos].roomId)
                 }
             }
         }

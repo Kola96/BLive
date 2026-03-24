@@ -3,11 +3,11 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="10dp"
+    android:layout_margin="@dimen/live_card_item_margin"
     android:focusable="true"
     android:focusableInTouchMode="true"
     android:stateListAnimator="@animator/card_focus_animator"
-    android:paddingBottom="12dp">
+    android:paddingBottom="@dimen/live_card_bottom_padding">
 
     <!-- Foreground focused border -->
     <View
@@ -29,7 +29,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintDimensionRatio="16:9"
-        app:cardCornerRadius="16dp"
+        app:cardCornerRadius="@dimen/live_card_corner_radius"
         app:cardElevation="0dp"
         app:cardBackgroundColor="#2b2c38">
 
@@ -48,7 +48,7 @@
             <!-- 渐变遮罩层 -->
             <View
                 android:layout_width="match_parent"
-                android:layout_height="60dp"
+                android:layout_height="@dimen/live_card_gradient_height"
                 android:layout_alignParentBottom="true"
                 android:background="@drawable/gradient_mask"
                 android:alpha="0.8" />
@@ -60,8 +60,8 @@
                 android:orientation="horizontal"
                 android:layout_alignParentBottom="true"
                 android:layout_alignParentStart="true"
-                android:layout_marginStart="12dp"
-                android:layout_marginBottom="12dp"
+                android:layout_marginStart="@dimen/live_card_info_horizontal_margin"
+                android:layout_marginBottom="@dimen/live_card_info_bottom_margin"
                 android:gravity="center_vertical">
 
                 <TextView
@@ -82,13 +82,13 @@
                 android:orientation="horizontal"
                 android:layout_alignParentBottom="true"
                 android:layout_alignParentEnd="true"
-                android:layout_marginEnd="12dp"
-                android:layout_marginBottom="12dp"
+                android:layout_marginEnd="@dimen/live_card_info_horizontal_margin"
+                android:layout_marginBottom="@dimen/live_card_info_bottom_margin"
                 android:gravity="center_vertical">
 
                 <ImageView
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
+                    android:layout_width="@dimen/live_card_info_icon_size"
+                    android:layout_height="@dimen/live_card_info_icon_size"
                     android:src="@drawable/ic_lucide_eye"
                     android:tint="#FFFFFF" />
 
@@ -96,10 +96,10 @@
                     android:id="@+id/viewer_count_text"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
+                    android:layout_marginStart="@dimen/live_card_info_text_spacing"
                     android:text="10.5万"
                     android:textColor="@android:color/white"
-                    android:textSize="14sp"
+                    android:textSize="@dimen/live_card_viewer_text_size"
                     android:textStyle="bold" />
             </LinearLayout>
         </RelativeLayout>
@@ -115,7 +115,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="@dimen/live_card_title_margin_top"
-        android:layout_marginHorizontal="4dp"
+        android:layout_marginHorizontal="@dimen/live_card_title_horizontal_margin"
         android:gravity="top"
         android:includeFontPadding="false"
         android:textColor="@android:color/white"

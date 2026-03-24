@@ -12,14 +12,14 @@ class MainFocusNavigator(
     private val btnSettings: FrameLayout,
     private val btnLogout: FrameLayout
 ) {
-    fun focusContent(state: LiveListState, tab: MainTabType, gridItemCount: Int) {
+    fun focusContent(state: LiveListState, tab: MainTabType, gridItemCount: Int, targetPosition: Int) {
         when (tab) {
             MainTabType.Mine -> {
                 btnSettings.requestFocus()
             }
             MainTabType.Recommend, MainTabType.Following -> {
                 when (state) {
-                    LiveListState.Content -> focusGridFirstItem(gridItemCount)
+                    LiveListState.Content -> focusGridItem(gridItemCount, targetPosition)
                     LiveListState.Empty -> emptyRefreshButton.requestFocus()
                     LiveListState.Error -> errorRefreshButton.requestFocus()
                     LiveListState.Loading -> Unit
@@ -29,13 +29,14 @@ class MainFocusNavigator(
         }
     }
 
-    private fun focusGridFirstItem(gridItemCount: Int) {
+    private fun focusGridItem(gridItemCount: Int, targetPosition: Int) {
         if (gridView.visibility != View.VISIBLE || gridItemCount <= 0) {
             return
         }
-        gridView.scrollToPosition(0)
+        val safePosition = targetPosition.coerceIn(0, gridItemCount - 1)
+        gridView.scrollToPosition(safePosition)
         gridView.post {
-            val holder = gridView.findViewHolderForAdapterPosition(0)
+            val holder = gridView.findViewHolderForAdapterPosition(safePosition)
             if (holder != null) {
                 holder.itemView.requestFocus()
             } else {

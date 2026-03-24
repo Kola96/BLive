@@ -10,8 +10,18 @@
     <dimen name="login_status_text_size">14sp</dimen>
     <dimen name="login_countdown_text_size">12sp</dimen>
 
-    <dimen name="live_card_anchor_text_size">12sp</dimen>
-    <dimen name="live_card_title_text_size">16sp</dimen>
-    <dimen name="live_card_title_height">48dp</dimen>
-    <dimen name="live_card_title_margin_top">10dp</dimen>
+    <dimen name="live_card_item_margin">8dp</dimen>
+    <dimen name="live_card_bottom_padding">10dp</dimen>
+    <dimen name="live_card_corner_radius">14dp</dimen>
+    <dimen name="live_card_gradient_height">56dp</dimen>
+    <dimen name="live_card_info_horizontal_margin">10dp</dimen>
+    <dimen name="live_card_info_bottom_margin">10dp</dimen>
+    <dimen name="live_card_info_icon_size">14dp</dimen>
+    <dimen name="live_card_info_text_spacing">4dp</dimen>
+    <dimen name="live_card_anchor_text_size">11sp</dimen>
+    <dimen name="live_card_viewer_text_size">11sp</dimen>
+    <dimen name="live_card_title_text_size">14sp</dimen>
+    <dimen name="live_card_title_height">42dp</dimen>
+    <dimen name="live_card_title_margin_top">8dp</dimen>
+    <dimen name="live_card_title_horizontal_margin">2dp</dimen>
 </resources>

@@ -9,11 +9,12 @@ import androidx.leanback.widget.VerticalGridView
 import com.blive.tv.R
 
 data class MainViewRefs(
-    val tabLogin: TextView,
-    val tabMine: TextView,
-    val tabRecommend: TextView,
-    val tabFollowing: TextView,
-    val tabPartition: TextView,
+    val tabLogin: View,
+    val tabMine: View,
+    val tabRecommend: View,
+    val tabFollowing: View,
+    val tabPartition: View,
+    val tabFocusSlider: View,
 
     val loginContainer: View,
     val mineContainer: View,

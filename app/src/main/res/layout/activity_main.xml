@@ -9,135 +9,208 @@
     <!-- 左侧边栏 -->
     <LinearLayout
         android:id="@+id/main_sidebar_container"
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="match_parent"
-        android:layout_weight="0.15"
         android:background="#181820"
         android:orientation="vertical"
         android:paddingVertical="40dp"
         android:elevation="4dp">
 
         <!-- Logo -->
-        <LinearLayout
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="24dp"
             android:layout_marginBottom="64dp">
 
             <ImageView
                 android:layout_width="32dp"
                 android:layout_height="32dp"
+                android:layout_gravity="center"
                 android:src="@mipmap/ic_launcher"
                 android:scaleType="centerCrop" />
-        </LinearLayout>
+        </FrameLayout>
 
         <!-- 标签页容器 -->
-        <LinearLayout
-            android:id="@+id/main_tab_container"
-            android:layout_width="match_parent"
+        <FrameLayout
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingHorizontal="16dp">
+            android:layout_gravity="center_horizontal">
 
-            <TextView
+            <!-- 焦点滑块 -->
+            <View
+                android:id="@+id/tab_focus_slider"
+                android:layout_width="0dp"
+                android:layout_height="64dp"
+                android:background="@drawable/main_tab_focus_slider"
+                android:visibility="invisible" />
+
+            <LinearLayout
+                android:id="@+id/main_tab_container"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingHorizontal="12dp"
+                android:layout_gravity="center_horizontal">
+
+            <FrameLayout
                 android:id="@+id/tab_login"
                 android:layout_width="match_parent"
                 android:layout_height="64dp"
-                android:gravity="center_vertical"
                 android:paddingHorizontal="16dp"
-                android:text="登录"
-                android:textSize="@dimen/main_tab_text_size"
-                android:textStyle="bold"
-                android:textColor="@color/tab_text_color"
                 android:background="@drawable/main_tab_background"
                 android:focusable="true"
                 android:focusableInTouchMode="true"
-                android:drawablePadding="16dp"
-                android:drawableStart="@drawable/ic_lucide_user"
-                android:drawableTint="@color/tab_text_color"
-                android:visibility="gone" />
+                android:layout_marginBottom="24dp"
+                android:visibility="gone">
 
-            <TextView
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_lucide_user"
+                    android:tint="@color/tab_text_color"
+                    android:duplicateParentState="true" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="登录"
+                    android:textSize="@dimen/main_tab_text_size"
+                    android:textStyle="bold"
+                    android:textColor="@color/tab_text_color"
+                    android:visibility="invisible"
+                    android:duplicateParentState="true" />
+            </FrameLayout>
+
+            <FrameLayout
                 android:id="@+id/tab_following"
                 android:layout_width="match_parent"
                 android:layout_height="64dp"
-                android:gravity="center_vertical"
                 android:paddingHorizontal="16dp"
-                android:text="关注"
-                android:textSize="@dimen/main_tab_text_size"
-                android:textStyle="bold"
-                android:textColor="@color/tab_text_color"
                 android:background="@drawable/main_tab_background"
                 android:focusable="true"
                 android:focusableInTouchMode="true"
-                android:drawablePadding="16dp"
-                android:drawableStart="@drawable/ic_lucide_heart"
-                android:drawableTint="@color/tab_text_color"
-                android:layout_marginBottom="24dp" />
+                android:layout_marginBottom="24dp">
 
-            <TextView
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_lucide_heart"
+                    android:tint="@color/tab_text_color"
+                    android:duplicateParentState="true" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="关注"
+                    android:textSize="@dimen/main_tab_text_size"
+                    android:textStyle="bold"
+                    android:textColor="@color/tab_text_color"
+                    android:visibility="invisible"
+                    android:duplicateParentState="true" />
+            </FrameLayout>
+
+            <FrameLayout
                 android:id="@+id/tab_recommend"
                 android:layout_width="match_parent"
                 android:layout_height="64dp"
-                android:gravity="center_vertical"
                 android:paddingHorizontal="16dp"
-                android:text="推荐"
-                android:textSize="@dimen/main_tab_text_size"
-                android:textStyle="bold"
-                android:textColor="@color/tab_text_color"
                 android:background="@drawable/main_tab_background"
                 android:focusable="true"
                 android:focusableInTouchMode="true"
-                android:drawablePadding="16dp"
-                android:drawableStart="@drawable/ic_lucide_home"
-                android:drawableTint="@color/tab_text_color"
-                android:layout_marginBottom="24dp" />
+                android:layout_marginBottom="24dp">
 
-            <TextView
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_lucide_home"
+                    android:tint="@color/tab_text_color"
+                    android:duplicateParentState="true" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="推荐"
+                    android:textSize="@dimen/main_tab_text_size"
+                    android:textStyle="bold"
+                    android:textColor="@color/tab_text_color"
+                    android:visibility="invisible"
+                    android:duplicateParentState="true" />
+            </FrameLayout>
+
+            <FrameLayout
                 android:id="@+id/tab_partition"
                 android:layout_width="match_parent"
                 android:layout_height="64dp"
-                android:gravity="center_vertical"
                 android:paddingHorizontal="16dp"
-                android:text="分区"
-                android:textSize="@dimen/main_tab_text_size"
-                android:textStyle="bold"
-                android:textColor="@color/tab_text_color"
                 android:background="@drawable/main_tab_background"
                 android:focusable="true"
                 android:focusableInTouchMode="true"
-                android:drawablePadding="16dp"
-                android:drawableStart="@drawable/ic_lucide_layout_grid"
-                android:drawableTint="@color/tab_text_color"
                 android:layout_marginBottom="24dp"
-                android:visibility="gone" />
+                android:visibility="gone">
 
-            <TextView
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_lucide_layout_grid"
+                    android:tint="@color/tab_text_color"
+                    android:duplicateParentState="true" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="分区"
+                    android:textSize="@dimen/main_tab_text_size"
+                    android:textStyle="bold"
+                    android:textColor="@color/tab_text_color"
+                    android:visibility="invisible"
+                    android:duplicateParentState="true" />
+            </FrameLayout>
+
+            <FrameLayout
                 android:id="@+id/tab_mine"
                 android:layout_width="match_parent"
                 android:layout_height="64dp"
-                android:gravity="center_vertical"
                 android:paddingHorizontal="16dp"
-                android:text="我的"
-                android:textSize="@dimen/main_tab_text_size"
-                android:textStyle="bold"
-                android:textColor="@color/tab_text_color"
                 android:background="@drawable/main_tab_background"
                 android:focusable="true"
-                android:focusableInTouchMode="true"
-                android:drawablePadding="16dp"
-                android:drawableStart="@drawable/ic_lucide_user"
-                android:drawableTint="@color/tab_text_color" />
+                android:focusableInTouchMode="true">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_lucide_user"
+                    android:tint="@color/tab_text_color"
+                    android:duplicateParentState="true" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="我的"
+                    android:textSize="@dimen/main_tab_text_size"
+                    android:textStyle="bold"
+                    android:textColor="@color/tab_text_color"
+                    android:visibility="invisible"
+                    android:duplicateParentState="true" />
+            </FrameLayout>
         </LinearLayout>
-    </LinearLayout>
+    </FrameLayout>
+</LinearLayout>
 
     <!-- 右侧主内容区 -->
     <FrameLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight="0.85"
+        android:layout_weight="1"
         android:padding="30dp">
 
         <!-- 1. 登录页容器 -->
