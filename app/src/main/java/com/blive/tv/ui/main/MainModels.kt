@@ -1,5 +1,7 @@
 package com.blive.tv.ui.main
 
+import com.blive.tv.data.model.AreaLevel1
+
 data class LiveRoom(
     val roomId: Long,
     val coverUrl: String,
@@ -30,7 +32,8 @@ enum class MainTabType {
     Mine,
     Recommend,
     Following,
-    Partition
+    Partition,
+    Search
 }
 
 data class MainScreenState(
@@ -39,8 +42,21 @@ data class MainScreenState(
     val selectedTab: MainTabType = MainTabType.Login,
     val followingRooms: List<LiveRoom> = emptyList(),
     val recommendRooms: List<LiveRoom> = emptyList(),
+    val partitionAreas: List<AreaLevel1> = emptyList(),
+    val selectedLevel1AreaId: Int = 0,
+    val selectedLevel2AreaId: Int = 0,
+    val partitionRooms: List<LiveRoom> = emptyList(),
+    val searchRooms: List<LiveRoom> = emptyList(),
     val followingListState: LiveListState = LiveListState.Loading,
     val recommendListState: LiveListState = LiveListState.Loading,
+    val partitionListState: LiveListState = LiveListState.Loading,
+    val searchListState: LiveListState = LiveListState.Loading,
     val isLoadingFollowing: Boolean = false,
-    val isLoadingRecommend: Boolean = false
+    val isLoadingRecommend: Boolean = false,
+    val isLoadingPartitionAreas: Boolean = false,
+    val isLoadingPartitionRooms: Boolean = false,
+    val isLoadingSearch: Boolean = false,
+    val isShowingSearchResult: Boolean = false,
+    val searchKeyword: String = "",
+    val searchHistory: List<String> = emptyList()
 )

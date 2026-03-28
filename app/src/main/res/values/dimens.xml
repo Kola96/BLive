@@ -24,4 +24,6 @@
     <dimen name="live_card_title_height">42dp</dimen>
     <dimen name="live_card_title_margin_top">8dp</dimen>
     <dimen name="live_card_title_horizontal_margin">2dp</dimen>
+    <dimen name="main_tab_slider_size">64dp</dimen>
+    <dimen name="main_tab_slider_stroke_width">3dp</dimen>
 </resources>

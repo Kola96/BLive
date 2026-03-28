@@ -20,11 +20,11 @@
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="64dp">
+            android:layout_marginBottom="32dp">
 
             <ImageView
-                android:layout_width="32dp"
-                android:layout_height="32dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_gravity="center"
                 android:src="@mipmap/ic_launcher"
                 android:scaleType="centerCrop" />
@@ -33,7 +33,8 @@
         <!-- 标签页容器 -->
         <FrameLayout
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="0dp"
+            android:layout_weight="1"
             android:layout_gravity="center_horizontal">
 
             <!-- 焦点滑块 -->
@@ -47,7 +48,7 @@
             <LinearLayout
                 android:id="@+id/main_tab_container"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_height="match_parent"
                 android:orientation="vertical"
                 android:paddingHorizontal="12dp"
                 android:layout_gravity="center_horizontal">
@@ -55,12 +56,12 @@
             <FrameLayout
                 android:id="@+id/tab_login"
                 android:layout_width="match_parent"
-                android:layout_height="64dp"
+                android:layout_height="0dp"
+                android:layout_weight="1"
                 android:paddingHorizontal="16dp"
                 android:background="@drawable/main_tab_background"
                 android:focusable="true"
                 android:focusableInTouchMode="true"
-                android:layout_marginBottom="24dp"
                 android:visibility="gone">
 
                 <ImageView
@@ -86,12 +87,12 @@
             <FrameLayout
                 android:id="@+id/tab_following"
                 android:layout_width="match_parent"
-                android:layout_height="64dp"
+                android:layout_height="0dp"
+                android:layout_weight="1"
                 android:paddingHorizontal="16dp"
                 android:background="@drawable/main_tab_background"
                 android:focusable="true"
-                android:focusableInTouchMode="true"
-                android:layout_marginBottom="24dp">
+                android:focusableInTouchMode="true">
 
                 <ImageView
                     android:layout_width="24dp"
@@ -116,12 +117,12 @@
             <FrameLayout
                 android:id="@+id/tab_recommend"
                 android:layout_width="match_parent"
-                android:layout_height="64dp"
+                android:layout_height="0dp"
+                android:layout_weight="1"
                 android:paddingHorizontal="16dp"
                 android:background="@drawable/main_tab_background"
                 android:focusable="true"
-                android:focusableInTouchMode="true"
-                android:layout_marginBottom="24dp">
+                android:focusableInTouchMode="true">
 
                 <ImageView
                     android:layout_width="24dp"
@@ -146,13 +147,12 @@
             <FrameLayout
                 android:id="@+id/tab_partition"
                 android:layout_width="match_parent"
-                android:layout_height="64dp"
+                android:layout_height="0dp"
+                android:layout_weight="1"
                 android:paddingHorizontal="16dp"
                 android:background="@drawable/main_tab_background"
                 android:focusable="true"
-                android:focusableInTouchMode="true"
-                android:layout_marginBottom="24dp"
-                android:visibility="gone">
+                android:focusableInTouchMode="true">
 
                 <ImageView
                     android:layout_width="24dp"
@@ -175,9 +175,40 @@
             </FrameLayout>
 
             <FrameLayout
+                android:id="@+id/tab_search"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:paddingHorizontal="16dp"
+                android:background="@drawable/main_tab_background"
+                android:focusable="true"
+                android:focusableInTouchMode="true">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_lucide_search"
+                    android:tint="@color/tab_text_color"
+                    android:duplicateParentState="true" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="搜索"
+                    android:textSize="@dimen/main_tab_text_size"
+                    android:textStyle="bold"
+                    android:textColor="@color/tab_text_color"
+                    android:visibility="invisible"
+                    android:duplicateParentState="true" />
+            </FrameLayout>
+
+            <FrameLayout
                 android:id="@+id/tab_mine"
                 android:layout_width="match_parent"
-                android:layout_height="64dp"
+                android:layout_height="0dp"
+                android:layout_weight="1"
                 android:paddingHorizontal="16dp"
                 android:background="@drawable/main_tab_background"
                 android:focusable="true"
@@ -426,7 +457,105 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 3. 网格列表容器 (推荐/关注 共用) -->
+        <!-- 3. 搜索输入页容器 -->
+        <LinearLayout
+            android:id="@+id/search_input_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:paddingTop="64dp"
+            android:visibility="gone">
+
+            <!-- 搜索框区域 -->
+            <LinearLayout
+                android:layout_width="600dp"
+                android:layout_height="64dp"
+                android:orientation="horizontal"
+                android:background="@drawable/mine_settings_button_background"
+                android:paddingHorizontal="16dp"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="32dp">
+
+                <EditText
+                    android:id="@+id/search_edit_text"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@null"
+                    android:hint="搜索直播间或主播"
+                    android:textColorHint="#808080"
+                    android:textColor="#FFFFFF"
+                    android:textSize="20sp"
+                    android:maxLines="1"
+                    android:singleLine="true"
+                    android:imeOptions="actionSearch" />
+
+                <FrameLayout
+                    android:id="@+id/btn_search"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true">
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_lucide_search"
+                        android:tint="#FFFFFF" />
+                </FrameLayout>
+            </LinearLayout>
+
+            <!-- 搜索历史区域 -->
+            <LinearLayout
+                android:id="@+id/search_history_container"
+                android:layout_width="600dp"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="16dp">
+                    
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="搜索历史"
+                        android:textColor="#A0A0A0"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+                        
+                    <TextView
+                        android:id="@+id/btn_clear_history"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="清空"
+                        android:textColor="#A0A0A0"
+                        android:textSize="14sp"
+                        android:paddingHorizontal="8dp"
+                        android:paddingVertical="4dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:focusable="true"
+                        android:focusableInTouchMode="true" />
+                </LinearLayout>
+
+                <com.google.android.flexbox.FlexboxLayout
+                    android:id="@+id/search_history_flexbox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:flexWrap="wrap"
+                    app:alignItems="flex_start"
+                    app:alignContent="flex_start" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 4. 网格列表容器 (推荐/关注/分区/搜索结果 共用) -->
         <LinearLayout
             android:id="@+id/grid_container"
             android:layout_width="match_parent"
@@ -434,18 +563,68 @@
             android:orientation="vertical"
             android:clipChildren="false">
 
-            <TextView
-                android:id="@+id/grid_title"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:id="@+id/grid_header_container"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="为您推荐"
-                android:textColor="#FFFFFF"
-                android:textSize="@dimen/main_page_title_text_size"
-                android:textStyle="bold" />
+                android:orientation="vertical"
+                android:background="#1d1e23"
+                android:elevation="8dp"
+                android:outlineProvider="none"
+                android:paddingBottom="8dp"
+                android:clipChildren="false"
+                android:clipToPadding="false">
+
+                <TextView
+                    android:id="@+id/grid_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="为您推荐"
+                    android:textColor="#FFFFFF"
+                    android:textSize="@dimen/main_page_title_text_size"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="24dp" />
+
+                <!-- 分区导航容器 -->
+                <LinearLayout
+                    android:id="@+id/area_selectors_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    android:layout_marginBottom="24dp"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
+
+                    <!-- 1级分区 -->
+                    <androidx.leanback.widget.HorizontalGridView
+                        android:id="@+id/level1_area_grid"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginBottom="16dp"
+                        android:focusable="true"
+                        android:focusableInTouchMode="true"
+                        android:nextFocusDown="@id/main_grid"
+                        android:clipChildren="false"
+                        android:clipToPadding="false" />
+
+                    <!-- 2级分区 -->
+                    <androidx.leanback.widget.HorizontalGridView
+                        android:id="@+id/level2_area_grid"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:focusable="true"
+                        android:focusableInTouchMode="true"
+                        android:nextFocusDown="@id/main_grid"
+                        android:clipChildren="false"
+                        android:clipToPadding="false" />
+                </LinearLayout>
+            </LinearLayout>
 
             <RelativeLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:elevation="4dp"
                 android:clipChildren="false">
 
                 <androidx.leanback.widget.VerticalGridView
@@ -467,7 +646,9 @@
                     android:layout_height="match_parent"
                     android:gravity="center"
                     android:orientation="vertical"
-                    android:visibility="gone">
+                    android:visibility="gone"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true">
                     <ProgressBar
                         android:id="@+id/live_list_loading_progress"
                         style="?android:attr/progressBarStyleLarge"

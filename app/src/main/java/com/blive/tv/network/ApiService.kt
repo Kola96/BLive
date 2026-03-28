@@ -45,6 +45,14 @@ interface ApiService {
         @QueryMap params: Map<String, String>
     ): Call<LiveRecommendResponse>
 
+    @GET("/xlive/web-interface/v1/index/getWebAreaList")
+    fun getWebAreaList(@Query("source_id") sourceId: Int = 1): Call<WebAreaListResponse>
+
+    @GET("/xlive/web-interface/v1/second/getList")
+    fun getAreaRoomList(
+        @QueryMap params: Map<String, String>
+    ): Call<LiveRecommendResponse>
+
     @GET("/room/v1/Room/get_info")
     fun getRoomBasicInfo(
         @Query("room_id") roomId: Long
@@ -66,4 +74,10 @@ interface ApiService {
         @Query("room_id") roomId: Long,
         @Query("type") type: Int = 0
     ): Call<com.blive.tv.data.model.DanmuInfoResponse>
+
+    // 搜索直播间
+    @GET("/x/web-interface/wbi/search/type")
+    fun getLiveSearch(
+        @QueryMap params: Map<String, String>
+    ): Call<com.blive.tv.data.model.SearchLiveResponse>
 }

@@ -1,5 +1,6 @@
 package com.blive.tv.network
 
+import java.net.URLEncoder
 import java.security.MessageDigest
 
 object WbiSigner {
@@ -32,7 +33,10 @@ object WbiSigner {
             .toMutableMap()
         val wts = timestampSeconds.toString()
         filtered["wts"] = wts
-        val query = filtered.toSortedMap().entries.joinToString("&") { "${it.key}=${it.value}" }
+        val query = filtered.toSortedMap().entries.joinToString("&") {
+            val encodedValue = URLEncoder.encode(it.value, "UTF-8").replace("+", "%20")
+            "${it.key}=${encodedValue}"
+        }
         val signInput = query + buildMixinKey(imgKey, subKey)
         val wRid = md5(signInput)
         return Pair(wRid, wts)

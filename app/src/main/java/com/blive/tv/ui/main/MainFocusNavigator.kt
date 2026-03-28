@@ -1,18 +1,24 @@
 package com.blive.tv.ui.main
 
 import android.view.View
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import androidx.leanback.widget.VerticalGridView
+import androidx.leanback.widget.HorizontalGridView
 
 class MainFocusNavigator(
     private val gridView: VerticalGridView,
+    private val level1AreaGrid: HorizontalGridView,
+    private val level2AreaGrid: HorizontalGridView,
     private val emptyRefreshButton: ImageButton,
     private val errorRefreshButton: ImageButton,
+    private val loadingContainer: View,
     private val btnSettings: FrameLayout,
-    private val btnLogout: FrameLayout
+    private val btnLogout: FrameLayout,
+    private val searchEditText: EditText
 ) {
-    fun focusContent(state: LiveListState, tab: MainTabType, gridItemCount: Int, targetPosition: Int) {
+    fun focusContent(state: LiveListState, tab: MainTabType, gridItemCount: Int, targetPosition: Int, isShowingSearchResult: Boolean = false) {
         when (tab) {
             MainTabType.Mine -> {
                 btnSettings.requestFocus()
@@ -22,7 +28,24 @@ class MainFocusNavigator(
                     LiveListState.Content -> focusGridItem(gridItemCount, targetPosition)
                     LiveListState.Empty -> emptyRefreshButton.requestFocus()
                     LiveListState.Error -> errorRefreshButton.requestFocus()
-                    LiveListState.Loading -> Unit
+                    LiveListState.Loading -> loadingContainer.requestFocus()
+                }
+            }
+            MainTabType.Partition -> {
+                if (level1AreaGrid.visibility == View.VISIBLE) {
+                    level1AreaGrid.requestFocus()
+                }
+            }
+            MainTabType.Search -> {
+                if (isShowingSearchResult) {
+                    when (state) {
+                        LiveListState.Empty -> emptyRefreshButton.requestFocus()
+                        LiveListState.Error -> errorRefreshButton.requestFocus()
+                        LiveListState.Loading -> loadingContainer.requestFocus()
+                        else -> focusGridItem(gridItemCount, targetPosition)
+                    }
+                } else {
+                    searchEditText.requestFocus()
                 }
             }
             else -> Unit

@@ -35,8 +35,11 @@ object RetrofitClient {
                 }
                 if (shouldAttachSessData(original)) {
                     val sessData = TokenManager.getSessData(AppRuntime.appContext).orEmpty()
-                    if (sessData.isNotEmpty() && original.header("Cookie").isNullOrEmpty()) {
-                        requestBuilder.header("Cookie", "SESSDATA=$sessData")
+                    // 只有在 CookieJar 没有加载到 SESSDATA 时才手动补充，防止覆盖 CookieJar 的其他 cookie（如 buvid3）
+                    val existingCookie = original.header("Cookie").orEmpty()
+                    if (sessData.isNotEmpty() && !existingCookie.contains("SESSDATA=")) {
+                        val newCookie = if (existingCookie.isEmpty()) "SESSDATA=$sessData" else "$existingCookie; SESSDATA=$sessData"
+                        requestBuilder.header("Cookie", newCookie)
                     }
                 }
                 chain.proceed(requestBuilder.build())
@@ -105,7 +108,8 @@ object RetrofitClient {
         val host = request.url.host
         val path = request.url.encodedPath
         if (host == "live.bilibili.com" && path == "/all") return true
-        return host == "api.live.bilibili.com" && path == "/xlive/web-interface/v1/second/getUserRecommend"
+        if (host == "api.bilibili.com" && path == "/x/web-interface/wbi/search/type") return true
+        return host == "api.live.bilibili.com" && (path == "/xlive/web-interface/v1/second/getUserRecommend" || path == "/xlive/web-interface/v1/second/getList")
     }
 
     private fun shouldAttachSessData(request: Request): Boolean {

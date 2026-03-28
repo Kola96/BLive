@@ -30,4 +30,27 @@ data class LiveUserItem(
     @SerializedName("area_name_v2") val areaNameV2: String,
     @SerializedName("online") val online: Long = 0L,
     @SerializedName("text_small") val textSmall: String = ""
-)
+) {
+    fun toLiveRoom(): com.blive.tv.ui.main.LiveRoom {
+        val resolvedCover = when {
+            roomCover.startsWith("//") -> "http:$roomCover"
+            roomCover.startsWith("https://") -> roomCover.replace("https://", "http://")
+            else -> roomCover
+        }
+        val resolvedFace = when {
+            face.startsWith("//") -> "http:$face"
+            face.startsWith("https://") -> face.replace("https://", "http://")
+            else -> face
+        }
+        return com.blive.tv.ui.main.LiveRoom(
+            roomId = roomId,
+            coverUrl = resolvedCover,
+            anchorName = uname,
+            anchorAvatar = resolvedFace,
+            roomTitle = title,
+            areaName = areaNameV2,
+            viewerCount = online,
+            viewerCountText = textSmall.ifBlank { null }
+        )
+    }
+}

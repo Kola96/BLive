@@ -3,13 +3,6 @@
     <!-- Focused and Selected (focus + active) -->
     <!-- Removed focused states here as they will be handled by a sliding indicator in MainActivity -->
     
-    <!-- Selected only -->
-    <item android:state_selected="true" android:state_focused="false">
-        <shape android:shape="rectangle">
-            <solid android:color="#FF6699" />
-            <corners android:radius="16dp" />
-        </shape>
-    </item>
     <!-- Default -->
     <item>
         <shape android:shape="rectangle">

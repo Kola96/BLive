@@ -35,18 +35,28 @@ data class WatchedShowData(
 )
 
 fun RecommendRoomItem.toLiveRoom(): LiveRoom {
-    val coverUrl = when {
+    val rawCover = when {
         userCover.isNotEmpty() -> userCover
         systemCover.isNotEmpty() -> systemCover
         cover.isNotEmpty() -> cover
         else -> ""
     }
+    val resolvedCover = when {
+        rawCover.startsWith("//") -> "http:$rawCover"
+        rawCover.startsWith("https://") -> rawCover.replace("https://", "http://")
+        else -> rawCover
+    }
+    val resolvedFace = when {
+        face.startsWith("//") -> "http:$face"
+        face.startsWith("https://") -> face.replace("https://", "http://")
+        else -> face
+    }
     val area = if (areaV2Name.isNotEmpty()) areaV2Name else areaName
     return LiveRoom(
         roomId = roomId,
-        coverUrl = coverUrl,
+        coverUrl = resolvedCover,
         anchorName = uname,
-        anchorAvatar = face,
+        anchorAvatar = resolvedFace,
         roomTitle = title,
         areaName = area,
         viewerCount = online,

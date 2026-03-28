@@ -14,11 +14,14 @@ data class MainViewRefs(
     val tabRecommend: View,
     val tabFollowing: View,
     val tabPartition: View,
+    val tabSearch: View,
     val tabFocusSlider: View,
 
     val loginContainer: View,
     val mineContainer: View,
     val gridContainer: View,
+    val areaSelectorsContainer: View,
+    val searchInputContainer: View,
 
     val gridTitle: TextView,
     val gridView: VerticalGridView,
@@ -36,11 +39,15 @@ class MainUiRenderer(private val views: MainViewRefs) {
             views.tabMine.visibility = View.VISIBLE
             views.tabRecommend.visibility = View.VISIBLE
             views.tabFollowing.visibility = View.VISIBLE
+            views.tabPartition.visibility = View.VISIBLE
+            views.tabSearch.visibility = View.VISIBLE
         } else {
             views.tabLogin.visibility = View.VISIBLE
             views.tabMine.visibility = View.GONE
             views.tabRecommend.visibility = View.GONE
             views.tabFollowing.visibility = View.GONE
+            views.tabPartition.visibility = View.GONE
+            views.tabSearch.visibility = View.GONE
         }
     }
 
@@ -73,17 +80,21 @@ class MainUiRenderer(private val views: MainViewRefs) {
         }
     }
 
-    fun renderTabState(selectedTab: MainTabType) {
+    fun renderTabState(selectedTab: MainTabType, isShowingSearchResult: Boolean = false, searchKeyword: String = "") {
         // Reset all
         views.tabLogin.isSelected = false
         views.tabMine.isSelected = false
         views.tabRecommend.isSelected = false
         views.tabFollowing.isSelected = false
         views.tabPartition.isSelected = false
+        views.tabSearch.isSelected = false
 
         views.loginContainer.visibility = View.GONE
         views.mineContainer.visibility = View.GONE
         views.gridContainer.visibility = View.GONE
+        views.areaSelectorsContainer.visibility = View.GONE
+        views.searchInputContainer.visibility = View.GONE
+        views.gridTitle.visibility = View.VISIBLE
 
         when (selectedTab) {
             MainTabType.Login -> {
@@ -106,6 +117,18 @@ class MainUiRenderer(private val views: MainViewRefs) {
             }
             MainTabType.Partition -> {
                 views.tabPartition.isSelected = true
+                views.gridContainer.visibility = View.VISIBLE
+                views.gridTitle.visibility = View.GONE
+                views.areaSelectorsContainer.visibility = View.VISIBLE
+            }
+            MainTabType.Search -> {
+                views.tabSearch.isSelected = true
+                if (isShowingSearchResult) {
+                    views.gridContainer.visibility = View.VISIBLE
+                    views.gridTitle.text = "“${searchKeyword}”的搜索结果"
+                } else {
+                    views.searchInputContainer.visibility = View.VISIBLE
+                }
             }
         }
     }
