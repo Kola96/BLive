@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true">
+        <set>
+            <objectAnimator android:propertyName="scaleX" android:valueTo="1.05" android:duration="300" />
+            <objectAnimator android:propertyName="scaleY" android:valueTo="1.05" android:duration="300" />
+            <objectAnimator android:propertyName="translationY" android:valueTo="-8dp" android:duration="300" />
+            <objectAnimator android:propertyName="elevation" android:valueTo="12dp" android:duration="300" />
+        </set>
+    </item>
+    <item>
+        <set>
+            <objectAnimator android:propertyName="scaleX" android:valueTo="1.0" android:duration="300" />
+            <objectAnimator android:propertyName="scaleY" android:valueTo="1.0" android:duration="300" />
+            <objectAnimator android:propertyName="translationY" android:valueTo="0dp" android:duration="300" />
+            <objectAnimator android:propertyName="elevation" android:valueTo="0dp" android:duration="300" />
+        </set>
+    </item>
+</selector>

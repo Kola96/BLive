@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/area_tag_text"
+    android:layout_width="wrap_content"
+    android:layout_height="36dp"
+    android:layout_marginEnd="12dp"
+    android:paddingHorizontal="20dp"
+    android:gravity="center"
+    android:textSize="16sp"
+    android:textStyle="bold"
+    android:textColor="@color/area_tag_text_color_level2"
+    android:background="@drawable/bg_area_tag_level2"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
+    android:nextFocusDown="@id/main_grid" />

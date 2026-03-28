@@ -1,58 +1,65 @@
 package com.blive.tv.ui.main
 
-import android.view.KeyEvent
 import android.view.View
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
-import android.widget.TextView
 import androidx.leanback.widget.VerticalGridView
+import androidx.leanback.widget.HorizontalGridView
 
 class MainFocusNavigator(
-    private val userAvatarContainer: FrameLayout,
-    private val nicknameView: TextView,
     private val gridView: VerticalGridView,
+    private val level1AreaGrid: HorizontalGridView,
+    private val level2AreaGrid: HorizontalGridView,
     private val emptyRefreshButton: ImageButton,
-    private val errorRefreshButton: ImageButton
+    private val errorRefreshButton: ImageButton,
+    private val loadingContainer: View,
+    private val btnSettings: FrameLayout,
+    private val btnLogout: FrameLayout,
+    private val searchEditText: EditText
 ) {
-    fun handleAvatarKey(
-        keyCode: Int,
-        state: LiveListState,
-        gridItemCount: Int
-    ): Boolean {
-        return when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_DOWN -> {
+    fun focusContent(state: LiveListState, tab: MainTabType, gridItemCount: Int, targetPosition: Int, isShowingSearchResult: Boolean = false) {
+        when (tab) {
+            MainTabType.Mine -> {
+                btnSettings.requestFocus()
+            }
+            MainTabType.Recommend, MainTabType.Following -> {
                 when (state) {
-                    LiveListState.Content -> focusGridFirstItem(gridItemCount)
+                    LiveListState.Content -> focusGridItem(gridItemCount, targetPosition)
                     LiveListState.Empty -> emptyRefreshButton.requestFocus()
                     LiveListState.Error -> errorRefreshButton.requestFocus()
-                    LiveListState.Loading -> Unit
+                    LiveListState.Loading -> loadingContainer.requestFocus()
                 }
-                true
             }
-
-            KeyEvent.KEYCODE_DPAD_LEFT -> {
-                if (nicknameView.isFocusable) {
-                    nicknameView.requestFocus()
+            MainTabType.Partition -> {
+                if (level1AreaGrid.visibility == View.VISIBLE) {
+                    level1AreaGrid.requestFocus()
                 }
-                true
             }
-
-            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_UP -> true
-            else -> false
+            MainTabType.Search -> {
+                if (isShowingSearchResult) {
+                    when (state) {
+                        LiveListState.Empty -> emptyRefreshButton.requestFocus()
+                        LiveListState.Error -> errorRefreshButton.requestFocus()
+                        LiveListState.Loading -> loadingContainer.requestFocus()
+                        else -> focusGridItem(gridItemCount, targetPosition)
+                    }
+                } else {
+                    searchEditText.requestFocus()
+                }
+            }
+            else -> Unit
         }
     }
 
-    fun focusAvatar() {
-        userAvatarContainer.requestFocus()
-    }
-
-    private fun focusGridFirstItem(gridItemCount: Int) {
+    private fun focusGridItem(gridItemCount: Int, targetPosition: Int) {
         if (gridView.visibility != View.VISIBLE || gridItemCount <= 0) {
             return
         }
-        gridView.scrollToPosition(0)
+        val safePosition = targetPosition.coerceIn(0, gridItemCount - 1)
+        gridView.scrollToPosition(safePosition)
         gridView.post {
-            val holder = gridView.findViewHolderForAdapterPosition(0)
+            val holder = gridView.findViewHolderForAdapterPosition(safePosition)
             if (holder != null) {
                 holder.itemView.requestFocus()
             } else {

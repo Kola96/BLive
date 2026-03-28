@@ -1,13 +1,14 @@
 package com.blive.tv.network
 
 import com.blive.tv.data.model.*
+import okhttp3.ResponseBody
 import retrofit2.Call
 import retrofit2.http.FieldMap
 import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
-import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Query
+import retrofit2.http.QueryMap
 
 interface ApiService {
     // 申请TV端登录二维码
@@ -23,7 +24,6 @@ interface ApiService {
     // 获取用户关注的直播间列表
     @GET("/xlive/web-ucenter/user/following")
     fun getLiveUsers(
-        @Header("Cookie") cookie: String,
         @retrofit2.http.Query("page") page: Int,
         @retrofit2.http.Query("page_size") pageSize: Int,
         @retrofit2.http.Query("ignoreRecord") ignoreRecord: Int = 1,
@@ -32,14 +32,35 @@ interface ApiService {
 
     // 获取用户信息
     @GET("/x/web-interface/nav")
-    fun getNavInfo(
-        @Header("Cookie") cookie: String
-    ): Call<UserInfoResponse>
+    fun getNavInfo(): Call<UserInfoResponse>
+
+    @GET("/x/frontend/finger/spi")
+    fun getFingerSpiRaw(): Call<ResponseBody>
+
+    @GET("/all")
+    fun getLiveAllPageRaw(): Call<ResponseBody>
+
+    @GET("/xlive/web-interface/v1/second/getUserRecommend")
+    fun getUserRecommend(
+        @QueryMap params: Map<String, String>
+    ): Call<LiveRecommendResponse>
+
+    @GET("/xlive/web-interface/v1/index/getWebAreaList")
+    fun getWebAreaList(@Query("source_id") sourceId: Int = 1): Call<WebAreaListResponse>
+
+    @GET("/xlive/web-interface/v1/second/getList")
+    fun getAreaRoomList(
+        @QueryMap params: Map<String, String>
+    ): Call<LiveRecommendResponse>
+
+    @GET("/room/v1/Room/get_info")
+    fun getRoomBasicInfo(
+        @Query("room_id") roomId: Long
+    ): Call<RoomBasicInfoResponse>
 
     // 获取直播间播放信息
     @GET("/xlive/web-room/v2/index/getRoomPlayInfo")
     fun getRoomPlayInfo(
-        @Header("Cookie") cookie: String,
         @Query("room_id") roomId: Long,
         @Query("protocol") protocol: String = "0,1",
         @Query("format") format: String = "0,1,2",
@@ -50,8 +71,13 @@ interface ApiService {
     // 获取弹幕服务器信息
     @GET("/room/v1/Danmu/getConf")
     fun getDanmuInfo(
-        @Header("Cookie") cookie: String,
         @Query("room_id") roomId: Long,
         @Query("type") type: Int = 0
     ): Call<com.blive.tv.data.model.DanmuInfoResponse>
+
+    // 搜索直播间
+    @GET("/x/web-interface/wbi/search/type")
+    fun getLiveSearch(
+        @QueryMap params: Map<String, String>
+    ): Call<com.blive.tv.data.model.SearchLiveResponse>
 }

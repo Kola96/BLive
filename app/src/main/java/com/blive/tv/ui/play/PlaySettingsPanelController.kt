@@ -3,6 +3,8 @@ package com.blive.tv.ui.play
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
 import androidx.recyclerview.widget.RecyclerView
 
 class PlaySettingsPanelController(
@@ -22,6 +24,16 @@ class PlaySettingsPanelController(
         }
         isVisible = true
         settingsPanel.visibility = View.VISIBLE
+        val animatedView = getAnimatedContentView()
+        animatedView.animate().cancel()
+        animatedView.alpha = 0f
+        animatedView.translationY = -40f * settingsPanel.resources.displayMetrics.density
+        animatedView.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(220L)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
         Log.d(logTag, "显示设置面板")
         requestFocusToQualityOption("显示设置面板")
     }
@@ -31,6 +43,7 @@ class PlaySettingsPanelController(
             return
         }
         isVisible = false
+        getAnimatedContentView().animate().cancel()
         settingsPanel.visibility = View.GONE
         onHide()
         settingsPanel.clearFocus()
@@ -97,5 +110,9 @@ class PlaySettingsPanelController(
                 Log.d(logTag, "$prefix - 未找到画质选项，请求焦点到playSettingsRecyclerView")
             }
         }
+    }
+
+    private fun getAnimatedContentView(): View {
+        return (settingsPanel as? ViewGroup)?.getChildAt(0) ?: settingsPanel
     }
 }

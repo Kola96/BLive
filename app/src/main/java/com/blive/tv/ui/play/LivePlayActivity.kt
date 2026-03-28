@@ -18,13 +18,15 @@ import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.PlaybackException
 import com.google.android.exoplayer2.Player
+import com.google.android.exoplayer2.source.DefaultMediaSourceFactory
+import com.google.android.exoplayer2.upstream.DefaultDataSource
+import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
 import com.blive.tv.danmu.DanmuItem
 import com.blive.tv.danmu.DanmuMessage
 import com.blive.tv.danmu.DanmuTcpClient
 import com.blive.tv.danmu.SimpleDanmuView
 import com.blive.tv.network.RetrofitClient
 import com.blive.tv.utils.ToastHelper
-import com.blive.tv.utils.TokenManager
 import com.blive.tv.utils.UserPreferencesManager
 
 class LivePlayActivity : AppCompatActivity() {
@@ -526,12 +528,8 @@ class LivePlayActivity : AppCompatActivity() {
     }
 
     private fun fetchRoomPlayInfo(roomId: Long) {
-        val sessData = TokenManager.getSessData(this)
-        val cookie = if (sessData != null) "SESSDATA=$sessData" else ""
-        
-        Log.d(TAG, "请求直播间播放信息，roomId: $roomId, cookie: $cookie")
-        
-        RetrofitClient.liveApiService.getRoomPlayInfo(cookie, roomId).enqueue(
+        Log.d(TAG, "请求直播间播放信息，roomId: $roomId")
+        RetrofitClient.liveApiService.getRoomPlayInfo(roomId).enqueue(
             object : retrofit2.Callback<RoomPlayInfoResponse> {
                 override fun onResponse(
                     call: retrofit2.Call<RoomPlayInfoResponse>,
@@ -716,7 +714,7 @@ class LivePlayActivity : AppCompatActivity() {
     private fun loadTargetPlayer(url: String) {
         Log.d(TAG, "开始加载 Target Player")
         targetPlayer?.release()
-        targetPlayer = ExoPlayer.Builder(this).build().also { exoPlayer ->
+        targetPlayer = createExoPlayer().also { exoPlayer ->
             exoPlayer.volume = 0f // 静音预加载
             val mediaItem = MediaItem.fromUri(url)
             exoPlayer.setMediaItem(mediaItem)
@@ -748,7 +746,7 @@ class LivePlayActivity : AppCompatActivity() {
     private fun loadFastPlayer(url: String) {
         Log.d(TAG, "开始加载 Fast Player")
         fastPlayer?.release()
-        fastPlayer = ExoPlayer.Builder(this).build().also { exoPlayer ->
+        fastPlayer = createExoPlayer().also { exoPlayer ->
             exoPlayer.volume = 0f
             val mediaItem = MediaItem.fromUri(url)
             exoPlayer.setMediaItem(mediaItem)
@@ -823,12 +821,18 @@ class LivePlayActivity : AppCompatActivity() {
                 
                 val oldPlayer = player
                 
+                // 1. 先清空旧播放器的 Surface 连接，防止后续释放时底层争抢
+                oldPlayer?.clearVideoSurface()
+                
                 playerView.player = exoPlayer
                 exoPlayer.volume = 1.0f
                 setupPlayerListener(exoPlayer)
                 
-                oldPlayer?.stop()
-                oldPlayer?.release()
+                // 延迟释放旧播放器，让底层编解码器完成最后几帧的处理
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    oldPlayer?.stop()
+                    oldPlayer?.release()
+                }, 500)
                 
                 player = exoPlayer
                 targetPlayer = null
@@ -881,6 +885,22 @@ class LivePlayActivity : AppCompatActivity() {
         }
     }
 
+    private fun createExoPlayer(): ExoPlayer {
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0")
+            .setDefaultRequestProperties(mapOf(
+                "Referer" to "https://live.bilibili.com/",
+                "Origin" to "https://live.bilibili.com"
+            ))
+
+        val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+
+        return ExoPlayer.Builder(this)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build()
+    }
+
     private fun initializePlayer(url: String) {
         loadingProgress.visibility = View.VISIBLE
         errorText.visibility = View.GONE
@@ -888,7 +908,7 @@ class LivePlayActivity : AppCompatActivity() {
         Log.d(TAG, "初始化播放器，当前URL索引: $currentUrlIndex，总URL数: ${playUrlList.size}")
         Log.d(TAG, "播放URL: $url")
 
-        player = ExoPlayer.Builder(this).build().also { exoPlayer ->
+        player = createExoPlayer().also { exoPlayer ->
             playerView.player = exoPlayer
             val mediaItem = MediaItem.fromUri(url)
             exoPlayer.setMediaItem(mediaItem)
@@ -1035,6 +1055,7 @@ class LivePlayActivity : AppCompatActivity() {
                 }
                 val now = System.currentTimeMillis()
                 if (now - lastBackPressedAt <= backPressExitWindowMs) {
+                    setResult(RESULT_OK)
                     finish()
                     return true
                 }
@@ -1161,10 +1182,7 @@ class LivePlayActivity : AppCompatActivity() {
     }
 
     private fun fetchRoomPlayInfoForRefresh(roomId: Long) {
-        val sessData = TokenManager.getSessData(this)
-        val cookie = if (sessData != null) "SESSDATA=$sessData" else ""
-        
-        RetrofitClient.liveApiService.getRoomPlayInfo(cookie, roomId).enqueue(
+        RetrofitClient.liveApiService.getRoomPlayInfo(roomId).enqueue(
             object : retrofit2.Callback<RoomPlayInfoResponse> {
                 override fun onResponse(call: retrofit2.Call<RoomPlayInfoResponse>, response: retrofit2.Response<RoomPlayInfoResponse>) {
                     if (response.isSuccessful && response.body()?.code == 0) {
@@ -1216,7 +1234,7 @@ class LivePlayActivity : AppCompatActivity() {
              loadingProgress.visibility = View.VISIBLE
         }
         
-        helperPlayer = ExoPlayer.Builder(this).build().also { exoPlayer ->
+        helperPlayer = createExoPlayer().also { exoPlayer ->
             exoPlayer.volume = 0f // 静音预加载
             val mediaItem = MediaItem.fromUri(url)
             exoPlayer.setMediaItem(mediaItem)
@@ -1250,20 +1268,25 @@ class LivePlayActivity : AppCompatActivity() {
             val newPlayer = helperPlayer!!
             val oldPlayer = player
             
-            // 1. 绑定新播放器到View
+            // 1. 先清空旧播放器的 Surface，防止后续底层争抢缓冲区所有权
+            oldPlayer?.clearVideoSurface()
+
+            // 2. 绑定新播放器到View
             playerView.player = newPlayer
             
-            // 2. 新播放器开启声音
+            // 3. 新播放器开启声音
             newPlayer.volume = 1.0f
             
-            // 3. 为新播放器设置标准监听器
+            // 4. 为新播放器设置标准监听器
             setupPlayerListener(newPlayer)
             
-            // 4. 释放旧播放器
-            oldPlayer?.stop()
-            oldPlayer?.release()
+            // 5. 延迟释放旧播放器，让硬件解码器优雅关闭
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                oldPlayer?.stop()
+                oldPlayer?.release()
+            }, 500)
             
-            // 5. 更新引用
+            // 6. 更新引用
             player = newPlayer
             helperPlayer = null
             

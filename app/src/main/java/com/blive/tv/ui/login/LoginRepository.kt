@@ -1,6 +1,7 @@
 package com.blive.tv.ui.login
 
 import android.content.Context
+import com.blive.tv.data.model.AuthCookie
 import com.blive.tv.data.model.PollLoginData
 import com.blive.tv.data.model.PollLoginResponse
 import com.blive.tv.data.model.UserToken
@@ -48,16 +49,43 @@ class LoginRepository(private val context: Context) {
     }
 
     fun saveToken(data: PollLoginData) {
-        val sessData = data.cookieInfo.cookies.firstOrNull { it.name == "SESSDATA" }?.value
+        val cookieDomain = resolveCookieDomain(data.cookieInfo.domains)
+        val authCookies = data.cookieInfo.cookies.map { cookie ->
+            AuthCookie(
+                name = cookie.name,
+                value = cookie.value,
+                domain = cookieDomain,
+                path = "/",
+                hostOnly = false,
+                persistent = cookie.expires > 0,
+                httpOnly = cookie.httpOnly == 1,
+                secure = cookie.secure == 1,
+                expiresAt = normalizeEpoch(cookie.expires)
+            )
+        }
+        val sessData = authCookies.firstOrNull { it.name.equals("SESSDATA", ignoreCase = true) }?.value
         val userToken = UserToken(
             accessToken = data.accessToken,
             refreshToken = data.refreshToken,
             expiresIn = data.expiresIn.toLong(),
             mid = data.mid,
             expireTime = System.currentTimeMillis() + (data.expiresIn * 1000L),
-            sessData = sessData
+            sessData = sessData,
+            cookies = authCookies
         )
         TokenManager.saveToken(context, userToken)
+    }
+
+    private fun normalizeEpoch(value: Long): Long? {
+        if (value <= 0L) return null
+        return if (value < 1_000_000_000_000L) value * 1000L else value
+    }
+
+    private fun resolveCookieDomain(domains: List<String>): String {
+        val raw = domains.firstOrNull { it.isNotBlank() } ?: "bilibili.com"
+        val withoutScheme = raw.substringAfter("://", raw)
+        val host = withoutScheme.substringBefore("/").trim()
+        return host.trimStart('.').ifBlank { "bilibili.com" }
     }
 
     private fun buildAuthCodeParams(): MutableMap<String, String> {

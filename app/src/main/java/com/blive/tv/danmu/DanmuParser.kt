@@ -186,21 +186,21 @@ class DanmuParser {
      */
     private fun parseDanmuMessage(jsonObject: com.google.gson.JsonObject, messages: MutableList<DanmuMessage>) {
         try {
-            val info = jsonObject.get("info").asJsonArray
+            val info = jsonObject.get("info")?.takeIf { !it.isJsonNull }?.asJsonArray ?: return
             
             // info[0] 包含弹幕基本信息，如颜色、模式、字体大小等
-            val baseInfo = info[0].asJsonArray
-            val color = baseInfo[3].asInt
-            val mode = baseInfo[1].asInt
-            val fontSize = baseInfo[2].asInt
+            val baseInfo = info.get(0)?.takeIf { !it.isJsonNull }?.asJsonArray
+            val color = baseInfo?.optInt(3, 16777215) ?: 16777215
+            val mode = baseInfo?.optInt(1, 1) ?: 1
+            val fontSize = baseInfo?.optInt(2, 25) ?: 25
             
             // info[1] 是弹幕内容
-            val content = info[1].asString
+            val content = info.optString(1, "")
             
             // info[2] 包含用户信息
-            val userInfo = info[2].asJsonArray
-            val username = userInfo[1].asString
-            val userId = userInfo[0].asLong
+            val userInfo = info.get(2)?.takeIf { !it.isJsonNull }?.asJsonArray
+            val username = userInfo?.optString(1, "未知用户") ?: "未知用户"
+            val userId = userInfo?.optLong(0, 0L) ?: 0L
             
             messages.add(
                 DanmuMessage.Danmu(
@@ -222,12 +222,12 @@ class DanmuParser {
      */
     private fun parseGiftMessage(jsonObject: com.google.gson.JsonObject, messages: MutableList<DanmuMessage>) {
         try {
-            val data = jsonObject.get("data").asJsonObject
-            val userId = data.get("uid").asLong
-            val username = data.get("uname").asString
-            val giftName = data.get("giftName").asString
-            val giftCount = data.get("num").asInt
-            val giftPrice = data.get("price").asInt
+            val data = jsonObject.get("data")?.takeIf { !it.isJsonNull }?.asJsonObject ?: return
+            val userId = data.optLong("uid", 0L)
+            val username = data.optString("uname", "未知用户")
+            val giftName = data.optString("giftName", "未知礼物")
+            val giftCount = data.optInt("num", 1)
+            val giftPrice = data.optInt("price", 0)
             
             messages.add(
                 DanmuMessage.Gift(
@@ -248,10 +248,10 @@ class DanmuParser {
      */
     private fun parseInteractMessage(jsonObject: com.google.gson.JsonObject, messages: MutableList<DanmuMessage>) {
         try {
-            val data = jsonObject.get("data").asJsonObject
-            val userId = data.get("uid").asLong
-            val username = data.get("uname").asString
-            val isVip = data.get("is_vip").asBoolean
+            val data = jsonObject.get("data")?.takeIf { !it.isJsonNull }?.asJsonObject ?: return
+            val userId = data.optLong("uid", 0L)
+            val username = data.optString("uname", "未知用户")
+            val isVip = data.optBoolean("is_vip", false)
             
             messages.add(
                 DanmuMessage.EnterRoom(
@@ -264,4 +264,44 @@ class DanmuParser {
             Log.e(TAG, "Failed to parse interact message", e)
         }
     }
+}
+
+// ================= Extension Functions for Safe JSON Parsing =================
+
+private fun com.google.gson.JsonObject.optString(memberName: String, fallback: String = ""): String {
+    val element = get(memberName)
+    return if (element != null && !element.isJsonNull) element.asString else fallback
+}
+
+private fun com.google.gson.JsonObject.optInt(memberName: String, fallback: Int = 0): Int {
+    val element = get(memberName)
+    return if (element != null && !element.isJsonNull) element.asInt else fallback
+}
+
+private fun com.google.gson.JsonObject.optLong(memberName: String, fallback: Long = 0L): Long {
+    val element = get(memberName)
+    return if (element != null && !element.isJsonNull) element.asLong else fallback
+}
+
+private fun com.google.gson.JsonObject.optBoolean(memberName: String, fallback: Boolean = false): Boolean {
+    val element = get(memberName)
+    return if (element != null && !element.isJsonNull) element.asBoolean else fallback
+}
+
+private fun com.google.gson.JsonArray.optString(index: Int, fallback: String = ""): String {
+    if (index >= size()) return fallback
+    val element = get(index)
+    return if (element != null && !element.isJsonNull) element.asString else fallback
+}
+
+private fun com.google.gson.JsonArray.optInt(index: Int, fallback: Int = 0): Int {
+    if (index >= size()) return fallback
+    val element = get(index)
+    return if (element != null && !element.isJsonNull) element.asInt else fallback
+}
+
+private fun com.google.gson.JsonArray.optLong(index: Int, fallback: Long = 0L): Long {
+    if (index >= size()) return fallback
+    val element = get(index)
+    return if (element != null && !element.isJsonNull) element.asLong else fallback
 }

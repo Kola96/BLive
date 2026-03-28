@@ -9,5 +9,6 @@ data class UserToken(
     @SerializedName("expires_in") val expiresIn: Long,
     @SerializedName("mid") val mid: Long,
     @SerializedName("expire_time") val expireTime: Long,
-    @SerializedName("sess_data") val sessData: String? = null
+    @SerializedName("sess_data") val sessData: String? = null,
+    @SerializedName("cookies") val cookies: List<AuthCookie> = emptyList()
 )
