@@ -225,14 +225,7 @@ class MainActivity : AppCompatActivity() {
         viewRefs.gridView.isFocusableInTouchMode = true
     }
 
-    private fun resolveGridColumnCount(): Int {
-        val smallestScreenWidthDp = resources.configuration.smallestScreenWidthDp
-        return when {
-            smallestScreenWidthDp >= 960 -> 5
-            smallestScreenWidthDp >= 720 -> 4
-            else -> 3
-        }
-    }
+    private fun resolveGridColumnCount(): Int = 4
 
     private fun initControllers() {
         uiRenderer = MainUiRenderer(viewRefs)

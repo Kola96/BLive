@@ -431,7 +431,8 @@
             android:id="@+id/grid_container"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:clipChildren="false">
 
             <TextView
                 android:id="@+id/grid_title"
@@ -440,17 +441,21 @@
                 android:text="为您推荐"
                 android:textColor="#FFFFFF"
                 android:textSize="@dimen/main_page_title_text_size"
-                android:textStyle="bold"
-                android:layout_marginBottom="24dp" />
+                android:textStyle="bold" />
 
             <RelativeLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent">
+                android:layout_height="match_parent"
+                android:clipChildren="false">
 
                 <androidx.leanback.widget.VerticalGridView
                     android:id="@+id/main_grid"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
+                    android:paddingTop="24dp"
+                    android:paddingBottom="24dp"
+                    android:clipToPadding="false"
+                    android:clipChildren="false"
                     android:focusable="true"
                     android:focusableInTouchMode="true"
                     android:overScrollMode="never" />

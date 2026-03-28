@@ -22,6 +22,15 @@ class MainViewModel(
     private val _toastEvent = MutableSharedFlow<String>()
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
 
+    private var recommendCache: List<LiveRoom> = emptyList()
+    private var recommendCacheTime: Long = 0L
+    private val cacheValidDurationMs = 10 * 60 * 1000L
+
+    private fun isRecommendCacheValid(): Boolean {
+        if (recommendCache.isEmpty()) return false
+        return System.currentTimeMillis() - recommendCacheTime < cacheValidDurationMs
+    }
+
     fun syncLoginState(isLoggedIn: Boolean) {
         if (!isLoggedIn) {
             _screenState.value = MainScreenState(
@@ -67,8 +76,10 @@ class MainViewModel(
             return
         }
         _screenState.update { it.copy(selectedTab = tab) }
-        if (tab == MainTabType.Recommend || tab == MainTabType.Following) {
-            refreshCurrentTab(force = true)
+        when (tab) {
+            MainTabType.Recommend -> refreshRecommendRooms(force = false)
+            MainTabType.Following -> refreshFollowingRooms(force = true)
+            else -> Unit
         }
     }
 
@@ -131,6 +142,16 @@ class MainViewModel(
             emitToast("正在刷新推荐直播间...")
             return
         }
+        if (!force && isRecommendCacheValid()) {
+            _screenState.update {
+                it.copy(
+                    recommendRooms = recommendCache,
+                    recommendListState = if (recommendCache.isEmpty()) LiveListState.Empty else LiveListState.Content,
+                    isLoadingRecommend = false
+                )
+            }
+            return
+        }
         _screenState.update {
             it.copy(
                 recommendListState = LiveListState.Loading,
@@ -143,6 +164,8 @@ class MainViewModel(
                 val normalizedRooms = rooms
                     .filter { it.roomId > 0L }
                     .distinctBy { it.roomId }
+                recommendCache = normalizedRooms
+                recommendCacheTime = System.currentTimeMillis()
                 _screenState.update {
                     it.copy(
                         recommendRooms = normalizedRooms,
