@@ -18,8 +18,14 @@ class MainFocusNavigator(
     private val btnLogout: FrameLayout,
     private val searchEditText: EditText
 ) {
-    fun focusContent(state: LiveListState, tab: MainTabType, gridItemCount: Int, targetPosition: Int, isShowingSearchResult: Boolean = false) {
-        when (tab) {
+    fun focusContent(
+        state: LiveListState,
+        tab: MainTabType,
+        gridItemCount: Int,
+        targetPosition: Int,
+        isShowingSearchResult: Boolean = false
+    ): Boolean {
+        return when (tab) {
             MainTabType.Mine -> {
                 btnSettings.requestFocus()
             }
@@ -28,12 +34,14 @@ class MainFocusNavigator(
                     LiveListState.Content -> focusGridItem(gridItemCount, targetPosition)
                     LiveListState.Empty -> emptyRefreshButton.requestFocus()
                     LiveListState.Error -> errorRefreshButton.requestFocus()
-                    LiveListState.Loading -> loadingContainer.requestFocus()
+                    LiveListState.Loading -> false
                 }
             }
             MainTabType.Partition -> {
                 if (level1AreaGrid.visibility == View.VISIBLE) {
                     level1AreaGrid.requestFocus()
+                } else {
+                    false
                 }
             }
             MainTabType.Search -> {
@@ -41,30 +49,28 @@ class MainFocusNavigator(
                     when (state) {
                         LiveListState.Empty -> emptyRefreshButton.requestFocus()
                         LiveListState.Error -> errorRefreshButton.requestFocus()
-                        LiveListState.Loading -> loadingContainer.requestFocus()
+                        LiveListState.Loading -> false
                         else -> focusGridItem(gridItemCount, targetPosition)
                     }
                 } else {
                     searchEditText.requestFocus()
                 }
             }
-            else -> Unit
+            else -> false
         }
     }
 
-    private fun focusGridItem(gridItemCount: Int, targetPosition: Int) {
+    private fun focusGridItem(gridItemCount: Int, targetPosition: Int): Boolean {
         if (gridView.visibility != View.VISIBLE || gridItemCount <= 0) {
-            return
+            return false
         }
         val safePosition = targetPosition.coerceIn(0, gridItemCount - 1)
         gridView.scrollToPosition(safePosition)
-        gridView.post {
-            val holder = gridView.findViewHolderForAdapterPosition(safePosition)
-            if (holder != null) {
-                holder.itemView.requestFocus()
-            } else {
-                gridView.getChildAt(0)?.requestFocus()
-            }
+        val holder = gridView.findViewHolderForAdapterPosition(safePosition)
+        return when {
+            holder?.itemView?.requestFocus() == true -> true
+            gridView.getChildAt(0)?.requestFocus() == true -> true
+            else -> false
         }
     }
 }

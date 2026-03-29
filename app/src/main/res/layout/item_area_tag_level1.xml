@@ -11,5 +11,4 @@
     android:textColor="@color/area_tag_text_color_level1"
     android:background="@drawable/bg_area_tag_level1"
     android:focusable="true"
-    android:focusableInTouchMode="true"
-    android:nextFocusDown="@id/main_grid" />
+    android:focusableInTouchMode="true" />

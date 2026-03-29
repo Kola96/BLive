@@ -89,45 +89,58 @@ class MainUiRenderer(private val views: MainViewRefs) {
         views.tabPartition.isSelected = false
         views.tabSearch.isSelected = false
 
-        views.loginContainer.visibility = View.GONE
-        views.mineContainer.visibility = View.GONE
-        views.gridContainer.visibility = View.GONE
-        views.areaSelectorsContainer.visibility = View.GONE
-        views.searchInputContainer.visibility = View.GONE
-        views.gridTitle.visibility = View.VISIBLE
+        val showLogin = selectedTab == MainTabType.Login
+        val showMine = selectedTab == MainTabType.Mine
+        val showGrid = selectedTab == MainTabType.Recommend || 
+            selectedTab == MainTabType.Following || 
+            selectedTab == MainTabType.Partition || 
+            (selectedTab == MainTabType.Search && isShowingSearchResult)
+        val showAreaSelectors = selectedTab == MainTabType.Partition
+        val showSearchInput = selectedTab == MainTabType.Search && !isShowingSearchResult
+
+        if (views.loginContainer.visibility != (if (showLogin) View.VISIBLE else View.GONE)) {
+            views.loginContainer.visibility = if (showLogin) View.VISIBLE else View.GONE
+        }
+        if (views.mineContainer.visibility != (if (showMine) View.VISIBLE else View.GONE)) {
+            views.mineContainer.visibility = if (showMine) View.VISIBLE else View.GONE
+        }
+        if (views.gridContainer.visibility != (if (showGrid) View.VISIBLE else View.GONE)) {
+            views.gridContainer.visibility = if (showGrid) View.VISIBLE else View.GONE
+        }
+        if (views.areaSelectorsContainer.visibility != (if (showAreaSelectors) View.VISIBLE else View.GONE)) {
+            views.areaSelectorsContainer.visibility = if (showAreaSelectors) View.VISIBLE else View.GONE
+        }
+        if (views.searchInputContainer.visibility != (if (showSearchInput) View.VISIBLE else View.GONE)) {
+            views.searchInputContainer.visibility = if (showSearchInput) View.VISIBLE else View.GONE
+        }
+
+        val showGridTitle = selectedTab != MainTabType.Partition
+        if (views.gridTitle.visibility != (if (showGridTitle) View.VISIBLE else View.GONE)) {
+            views.gridTitle.visibility = if (showGridTitle) View.VISIBLE else View.GONE
+        }
 
         when (selectedTab) {
             MainTabType.Login -> {
                 views.tabLogin.isSelected = true
-                views.loginContainer.visibility = View.VISIBLE
             }
             MainTabType.Mine -> {
                 views.tabMine.isSelected = true
-                views.mineContainer.visibility = View.VISIBLE
             }
             MainTabType.Recommend -> {
                 views.tabRecommend.isSelected = true
-                views.gridContainer.visibility = View.VISIBLE
                 views.gridTitle.text = "为您推荐"
             }
             MainTabType.Following -> {
                 views.tabFollowing.isSelected = true
-                views.gridContainer.visibility = View.VISIBLE
                 views.gridTitle.text = "我的关注"
             }
             MainTabType.Partition -> {
                 views.tabPartition.isSelected = true
-                views.gridContainer.visibility = View.VISIBLE
-                views.gridTitle.visibility = View.GONE
-                views.areaSelectorsContainer.visibility = View.VISIBLE
             }
             MainTabType.Search -> {
                 views.tabSearch.isSelected = true
                 if (isShowingSearchResult) {
-                    views.gridContainer.visibility = View.VISIBLE
                     views.gridTitle.text = "“${searchKeyword}”的搜索结果"
-                } else {
-                    views.searchInputContainer.visibility = View.VISIBLE
                 }
             }
         }

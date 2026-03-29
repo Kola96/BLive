@@ -16,7 +16,8 @@ data class AreaTagItem(
 class AreaTagAdapter(
     private val isLevel1: Boolean,
     private val onItemClick: (Int) -> Unit,
-    private val onNavigateBack: () -> Unit
+    private val onNavigateBack: () -> Unit,
+    private val onItemFocused: (Int) -> Unit
 ) : RecyclerView.Adapter<AreaTagAdapter.ViewHolder>() {
 
     init {
@@ -87,6 +88,15 @@ class AreaTagAdapter(
                     }
                 }
                 false
+            }
+
+            textView.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    val position = bindingAdapterPosition
+                    if (position != RecyclerView.NO_POSITION) {
+                        onItemFocused(position)
+                    }
+                }
             }
         }
     }

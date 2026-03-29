@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.blive.tv.data.model.AreaLevel1
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,6 +29,12 @@ class MainViewModel(
     private var recommendCacheTime: Long = 0L
     private val cacheValidDurationMs = 10 * 60 * 1000L
 
+    private data class PartitionCacheKey(val level1Id: Int, val level2Id: Int)
+    private data class PartitionCacheEntry(val rooms: List<LiveRoom>, val timestamp: Long)
+    private val partitionCaches = mutableMapOf<PartitionCacheKey, PartitionCacheEntry>()
+
+    private var nextFocusToken = 1L
+
     private val PREF_SEARCH_HISTORY = "search_history_pref"
     private val KEY_SEARCH_HISTORY = "history_list"
 
@@ -40,18 +47,33 @@ class MainViewModel(
         return System.currentTimeMillis() - recommendCacheTime < cacheValidDurationMs
     }
 
+    private fun isPartitionCacheValid(level1Id: Int, level2Id: Int): Boolean {
+        val entry = partitionCaches[PartitionCacheKey(level1Id, level2Id)] ?: return false
+        return System.currentTimeMillis() - entry.timestamp < cacheValidDurationMs
+    }
+
     fun syncLoginState(isLoggedIn: Boolean) {
         if (!isLoggedIn) {
             _screenState.value = MainScreenState(
                 isLoggedIn = false,
-                selectedTab = MainTabType.Login
+                selectedTab = MainTabType.Login,
+                tabUiState = TabUiState(MainTabType.Login),
+                focusRegion = FocusRegion.Tab(MainTabType.Login),
+                focusIntent = createFocusIntent(FocusTarget.Tab(MainTabType.Login))
             )
             return
         }
         _screenState.update {
             it.copy(
                 isLoggedIn = true,
-                selectedTab = if (it.selectedTab == MainTabType.Login) MainTabType.Recommend else it.selectedTab
+                selectedTab = if (it.selectedTab == MainTabType.Login) MainTabType.Following else it.selectedTab,
+                tabUiState = it.tabUiState.copy(
+                    highlightedTab = if (it.tabUiState.highlightedTab == MainTabType.Login) {
+                        MainTabType.Following
+                    } else {
+                        it.tabUiState.highlightedTab
+                    }
+                )
             )
         }
     }
@@ -60,12 +82,15 @@ class MainViewModel(
         _screenState.update {
             it.copy(
                 isLoggedIn = true,
-                selectedTab = MainTabType.Recommend,
-                recommendListState = LiveListState.Loading
+                selectedTab = MainTabType.Following,
+                tabUiState = TabUiState(MainTabType.Following),
+                focusRegion = FocusRegion.Tab(MainTabType.Following),
+                focusIntent = createFocusIntent(FocusTarget.Tab(MainTabType.Following)),
+                followingListState = LiveListState.Loading
             )
         }
         loadUserProfile()
-        refreshRecommendRooms(force = true)
+        refreshFollowingRooms(force = true)
     }
 
     fun refreshAfterResume() {
@@ -76,46 +101,47 @@ class MainViewModel(
         refreshCurrentTab()
     }
 
-    fun switchTab(tab: MainTabType) {
+    fun onTabFocused(tab: MainTabType) {
         val state = _screenState.value
         if (!state.isLoggedIn && tab != MainTabType.Login) {
             return
         }
-        if (state.selectedTab == tab) {
+        val tabChanged = state.selectedTab != tab
+        commitSelectedTab(tab)
+        if (tabChanged) {
+            refreshTabDataIfNeeded(tab)
+        }
+    }
+
+    fun requestTabFocus(tab: MainTabType = _screenState.value.selectedTab) {
+        _screenState.update {
+            it.copy(
+                tabUiState = it.tabUiState.copy(highlightedTab = tab),
+                focusIntent = createFocusIntent(FocusTarget.Tab(tab)),
+                pendingContentFocusRequest = PendingContentFocusRequest()
+            )
+        }
+    }
+
+    fun requestContentFocus(tab: MainTabType) {
+        val state = _screenState.value
+        if (!state.isLoggedIn && tab != MainTabType.Login) {
             return
         }
-
-        val shouldResetSearchState = state.selectedTab == MainTabType.Search &&
-            state.isShowingSearchResult &&
-            tab != MainTabType.Search
-
-        _screenState.update {
-            if (shouldResetSearchState) {
-                it.copy(
-                    selectedTab = tab,
-                    isShowingSearchResult = false,
-                    searchRooms = emptyList(),
-                    searchKeyword = ""
-                )
-            } else {
-                it.copy(selectedTab = tab)
-            }
+        val tabChanged = state.selectedTab != tab
+        if (tabChanged) {
+            commitSelectedTab(tab)
+            refreshTabDataIfNeeded(tab)
         }
-        when (tab) {
-            MainTabType.Recommend -> refreshRecommendRooms(force = false)
-            MainTabType.Following -> refreshFollowingRooms(force = true)
-            MainTabType.Partition -> {
-                if (_screenState.value.partitionAreas.isEmpty()) {
-                    refreshPartitionAreas()
-                } else {
-                    refreshPartitionRooms(force = false)
-                }
-            }
-            MainTabType.Search -> {
-                // Do nothing specific, just show search container
-            }
-            else -> Unit
+        if (tab == MainTabType.Login) {
+            requestTabFocus(MainTabType.Login)
+            return
         }
+        enqueuePendingContentFocus(tab, resolveDefaultContentTarget(_screenState.value, tab))
+    }
+
+    fun onNavigateBackToTab() {
+        requestTabFocus(_screenState.value.selectedTab)
     }
 
     fun refreshCurrentTab(force: Boolean = false) {
@@ -151,7 +177,7 @@ class MainViewModel(
         _screenState.update {
             it.copy(
                 isLoadingFollowing = true,
-                followingListState = LiveListState.Loading
+                followingListState = if (it.followingRooms.isNotEmpty()) LiveListState.Content else LiveListState.Loading
             )
         }
         viewModelScope.launch {
@@ -238,15 +264,21 @@ class MainViewModel(
         viewModelScope.launch {
             val result = repository.fetchWebAreaList()
             result.onSuccess { areas ->
+                val initialLevel1Id = if (areas.isNotEmpty()) areas[0].id else 0
                 _screenState.update {
                     it.copy(
                         partitionAreas = areas,
-                        selectedLevel1AreaId = if (areas.isNotEmpty()) areas[0].id else 0,
+                        selectedLevel1AreaId = initialLevel1Id,
                         selectedLevel2AreaId = 0,
+                        partitionFocusState = it.partitionFocusState.copy(
+                            level1Index = resolveLevel1Index(areas, initialLevel1Id),
+                            level2Index = 0,
+                            layer = PartitionFocusLayer.Level1
+                        ),
                         isLoadingPartitionAreas = false
                     )
                 }
-                refreshPartitionRooms(force = true)
+                refreshPartitionRooms(force = false)
             }.onFailure { error ->
                 _screenState.update {
                     it.copy(
@@ -262,7 +294,25 @@ class MainViewModel(
     fun refreshPartitionRooms(force: Boolean = false) {
         val state = _screenState.value
         if (!state.isLoggedIn) return
-        if (state.isLoadingPartitionRooms && !force) return
+        if (state.isLoadingPartitionRooms && !force) {
+            emitToast("正在刷新分区直播间...")
+            return
+        }
+        
+        if (!force) {
+            val cacheKey = PartitionCacheKey(state.selectedLevel1AreaId, state.selectedLevel2AreaId)
+            val entry = partitionCaches[cacheKey]
+            if (entry != null && System.currentTimeMillis() - entry.timestamp < cacheValidDurationMs) {
+                _screenState.update {
+                    it.copy(
+                        partitionRooms = entry.rooms,
+                        partitionListState = if (entry.rooms.isEmpty()) LiveListState.Empty else LiveListState.Content,
+                        isLoadingPartitionRooms = false
+                    )
+                }
+                return
+            }
+        }
         
         _screenState.update {
             it.copy(
@@ -273,6 +323,9 @@ class MainViewModel(
         viewModelScope.launch {
             val result = repository.fetchAreaRooms(state.selectedLevel1AreaId, state.selectedLevel2AreaId, 1)
             result.onSuccess { rooms ->
+                val cacheKey = PartitionCacheKey(state.selectedLevel1AreaId, state.selectedLevel2AreaId)
+                partitionCaches[cacheKey] = PartitionCacheEntry(rooms, System.currentTimeMillis())
+                
                 _screenState.update {
                     it.copy(
                         partitionRooms = rooms,
@@ -296,24 +349,127 @@ class MainViewModel(
     fun selectLevel1Area(areaId: Int) {
         val state = _screenState.value
         if (state.selectedLevel1AreaId == areaId) return
+        val level1Index = resolveLevel1Index(state.partitionAreas, areaId)
         _screenState.update {
             it.copy(
                 selectedLevel1AreaId = areaId,
-                selectedLevel2AreaId = 0 // reset to "全部"
+                selectedLevel2AreaId = 0,
+                partitionFocusState = it.partitionFocusState.copy(
+                    level1Index = level1Index,
+                    level2Index = 0,
+                    layer = PartitionFocusLayer.Level1
+                ),
+                focusRegion = FocusRegion.PartitionLevel1(level1Index),
+                focusIntent = createFocusIntent(FocusTarget.PartitionLevel1(level1Index))
             )
         }
-        refreshPartitionRooms(force = true)
+        refreshPartitionRooms(force = false)
     }
 
     fun selectLevel2Area(areaId: Int) {
         val state = _screenState.value
         if (state.selectedLevel2AreaId == areaId) return
+        val level2Index = resolveLevel2Index(state.partitionAreas, state.selectedLevel1AreaId, areaId)
         _screenState.update {
             it.copy(
-                selectedLevel2AreaId = areaId
+                selectedLevel2AreaId = areaId,
+                partitionFocusState = it.partitionFocusState.copy(
+                    level2Index = level2Index,
+                    layer = PartitionFocusLayer.Level2
+                ),
+                focusRegion = FocusRegion.PartitionLevel2(level2Index),
+                focusIntent = createFocusIntent(FocusTarget.PartitionLevel2(level2Index))
             )
         }
-        refreshPartitionRooms(force = true)
+        refreshPartitionRooms(force = false)
+    }
+
+    fun onPartitionLevel1Focused(index: Int) {
+        _screenState.update {
+            it.copy(
+                partitionFocusState = it.partitionFocusState.copy(level1Index = index, layer = PartitionFocusLayer.Level1),
+                focusRegion = FocusRegion.PartitionLevel1(index)
+            )
+        }
+    }
+
+    fun onPartitionLevel2Focused(index: Int) {
+        _screenState.update {
+            it.copy(
+                partitionFocusState = it.partitionFocusState.copy(level2Index = index, layer = PartitionFocusLayer.Level2),
+                focusRegion = FocusRegion.PartitionLevel2(index)
+            )
+        }
+    }
+
+    fun onGridFocused(tab: MainTabType, position: Int, roomId: Long) {
+        _screenState.update {
+            val updatedRestoreStates = it.gridRestoreStates.toMutableMap().apply {
+                this[tab] = GridRestoreState(position, roomId)
+            }
+            val updatedPartitionFocusState = if (tab == MainTabType.Partition) {
+                it.partitionFocusState.copy(
+                    layer = PartitionFocusLayer.Grid,
+                    gridRestoreState = GridRestoreState(position, roomId)
+                )
+            } else {
+                it.partitionFocusState
+            }
+            it.copy(
+                gridRestoreStates = updatedRestoreStates,
+                partitionFocusState = updatedPartitionFocusState,
+                focusRegion = FocusRegion.Grid(tab, position, roomId)
+            )
+        }
+    }
+
+    fun onPartitionGridBackRequested() {
+        val state = _screenState.value
+        val target = if (hasVisibleLevel2(state)) {
+            FocusTarget.PartitionLevel2(state.partitionFocusState.level2Index)
+        } else {
+            FocusTarget.PartitionLevel1(state.partitionFocusState.level1Index)
+        }
+        _screenState.update {
+            it.copy(
+                focusIntent = createFocusIntent(target),
+                partitionFocusState = it.partitionFocusState.copy(
+                    layer = if (hasVisibleLevel2(it)) PartitionFocusLayer.Level2 else PartitionFocusLayer.Level1
+                )
+            )
+        }
+    }
+
+    fun onSearchInputFocused() {
+        _screenState.update {
+            it.copy(focusRegion = FocusRegion.SearchInput)
+        }
+    }
+
+    fun onMineActionFocused(action: MineActionTarget) {
+        _screenState.update {
+            it.copy(focusRegion = FocusRegion.MineAction(action))
+        }
+    }
+
+    fun consumeFocusIntent(token: Long) {
+        val current = _screenState.value.focusIntent
+        if (current.token != token) {
+            return
+        }
+        _screenState.update {
+            it.copy(focusIntent = FocusIntent())
+        }
+    }
+
+    fun consumePendingContentFocus(token: Long) {
+        val current = _screenState.value.pendingContentFocusRequest
+        if (current.token != token) {
+            return
+        }
+        _screenState.update {
+            it.copy(pendingContentFocusRequest = PendingContentFocusRequest())
+        }
     }
 
     private fun loadSearchHistory() {
@@ -356,10 +512,16 @@ class MainViewModel(
 
         _screenState.update {
             it.copy(
+                selectedTab = MainTabType.Search,
+                tabUiState = it.tabUiState.copy(highlightedTab = MainTabType.Search),
                 isShowingSearchResult = true,
                 searchKeyword = trimmedKeyword,
                 isLoadingSearch = true,
-                searchListState = LiveListState.Loading
+                searchListState = LiveListState.Loading,
+                pendingContentFocusRequest = createPendingContentFocusRequest(
+                    MainTabType.Search,
+                    FocusTarget.Content(MainTabType.Search)
+                )
             )
         }
 
@@ -370,7 +532,18 @@ class MainViewModel(
                     it.copy(
                         searchRooms = rooms,
                         searchListState = if (rooms.isEmpty()) LiveListState.Empty else LiveListState.Content,
-                        isLoadingSearch = false
+                        isLoadingSearch = false,
+                        pendingContentFocusRequest = createPendingContentFocusRequest(
+                            MainTabType.Search,
+                            if (rooms.isEmpty()) {
+                                FocusTarget.Content(MainTabType.Search)
+                            } else {
+                                FocusTarget.Grid(
+                                    tab = MainTabType.Search,
+                                    roomId = it.gridRestoreStates[MainTabType.Search]?.roomId
+                                )
+                            }
+                        )
                     )
                 }
             }.onFailure { error ->
@@ -378,7 +551,11 @@ class MainViewModel(
                     it.copy(
                         searchRooms = emptyList(),
                         searchListState = LiveListState.Error,
-                        isLoadingSearch = false
+                        isLoadingSearch = false,
+                        pendingContentFocusRequest = createPendingContentFocusRequest(
+                            MainTabType.Search,
+                            FocusTarget.Content(MainTabType.Search)
+                        )
                     )
                 }
                 emitToast("搜索失败：${error.message}")
@@ -391,8 +568,48 @@ class MainViewModel(
             it.copy(
                 isShowingSearchResult = false,
                 searchRooms = emptyList(),
-                searchKeyword = ""
+                searchKeyword = "",
+                focusIntent = createFocusIntent(FocusTarget.SearchInput),
+                pendingContentFocusRequest = PendingContentFocusRequest()
             )
+        }
+    }
+
+    fun restoreAfterPlayReturn(originTab: MainTabType?, roomId: Long) {
+        when (originTab) {
+            MainTabType.Following -> {
+                commitSelectedTab(MainTabType.Following)
+                enqueuePendingContentFocus(
+                    MainTabType.Following,
+                    FocusTarget.Grid(MainTabType.Following, roomId = roomId)
+                )
+                refreshFollowingRooms(force = true)
+            }
+            MainTabType.Recommend -> {
+                commitSelectedTab(MainTabType.Recommend)
+                enqueuePendingContentFocus(
+                    MainTabType.Recommend,
+                    FocusTarget.Grid(MainTabType.Recommend, roomId = roomId)
+                )
+            }
+            MainTabType.Search -> {
+                commitSelectedTab(MainTabType.Search)
+                enqueuePendingContentFocus(
+                    MainTabType.Search,
+                    FocusTarget.Grid(MainTabType.Search, roomId = roomId)
+                )
+            }
+            MainTabType.Partition -> {
+                commitSelectedTab(MainTabType.Partition)
+                enqueuePendingContentFocus(
+                    MainTabType.Partition,
+                    FocusTarget.Grid(MainTabType.Partition, roomId = roomId)
+                )
+                if (_screenState.value.partitionAreas.isEmpty()) {
+                    refreshPartitionAreas()
+                }
+            }
+            else -> Unit
         }
     }
 
@@ -414,6 +631,114 @@ class MainViewModel(
         viewModelScope.launch {
             _toastEvent.emit(message)
         }
+    }
+
+    private fun commitSelectedTab(tab: MainTabType) {
+        val state = _screenState.value
+        val shouldClearPendingContentFocus = state.selectedTab != tab
+        val shouldResetSearchState = state.selectedTab == MainTabType.Search &&
+            state.isShowingSearchResult &&
+            tab != MainTabType.Search
+        _screenState.update {
+            var nextState = if (shouldResetSearchState) {
+                it.copy(
+                    selectedTab = tab,
+                    isShowingSearchResult = false,
+                    searchRooms = emptyList(),
+                    searchKeyword = "",
+                    pendingContentFocusRequest = PendingContentFocusRequest()
+                )
+            } else {
+                it.copy(
+                    selectedTab = tab,
+                    pendingContentFocusRequest = if (shouldClearPendingContentFocus) {
+                        PendingContentFocusRequest()
+                    } else {
+                        it.pendingContentFocusRequest
+                    }
+                )
+            }
+            nextState = nextState.copy(
+                tabUiState = nextState.tabUiState.copy(highlightedTab = tab),
+                focusRegion = FocusRegion.Tab(tab)
+            )
+            nextState
+        }
+    }
+
+    private fun refreshTabDataIfNeeded(tab: MainTabType) {
+        when (tab) {
+            MainTabType.Recommend -> refreshRecommendRooms(force = false)
+            MainTabType.Following -> refreshFollowingRooms(force = false)
+            MainTabType.Partition -> {
+                if (_screenState.value.partitionAreas.isEmpty()) {
+                    refreshPartitionAreas()
+                } else {
+                    refreshPartitionRooms(force = false)
+                }
+            }
+            MainTabType.Search, MainTabType.Mine, MainTabType.Login -> Unit
+        }
+    }
+
+    private fun createFocusIntent(target: FocusTarget): FocusIntent {
+        return FocusIntent(
+            target = target,
+            token = nextFocusToken++
+        )
+    }
+
+    private fun createPendingContentFocusRequest(
+        tab: MainTabType,
+        target: FocusTarget
+    ): PendingContentFocusRequest {
+        return PendingContentFocusRequest(
+            tab = tab,
+            target = target,
+            token = nextFocusToken++,
+            autoFocusWhenReady = true
+        )
+    }
+
+    private fun enqueuePendingContentFocus(tab: MainTabType, target: FocusTarget) {
+        _screenState.update {
+            it.copy(
+                pendingContentFocusRequest = createPendingContentFocusRequest(tab, target)
+            )
+        }
+    }
+
+    private fun resolveDefaultContentTarget(
+        state: MainScreenState,
+        tab: MainTabType
+    ): FocusTarget {
+        return when (tab) {
+            MainTabType.Login -> FocusTarget.Tab(MainTabType.Login)
+            MainTabType.Mine -> FocusTarget.MineAction(MineActionTarget.Settings)
+            MainTabType.Partition -> FocusTarget.Content(MainTabType.Partition)
+            MainTabType.Search -> if (state.isShowingSearchResult) {
+                FocusTarget.Content(MainTabType.Search)
+            } else {
+                FocusTarget.SearchInput
+            }
+            MainTabType.Recommend, MainTabType.Following -> FocusTarget.Content(tab)
+        }
+    }
+
+    private fun hasVisibleLevel2(state: MainScreenState): Boolean {
+        val level1 = state.partitionAreas.find { it.id == state.selectedLevel1AreaId } ?: return false
+        return level1.id != 0 && level1.list.isNotEmpty()
+    }
+
+    private fun resolveLevel1Index(areas: List<AreaLevel1>, areaId: Int): Int {
+        val index = areas.indexOfFirst { it.id == areaId }
+        return if (index >= 0) index else 0
+    }
+
+    private fun resolveLevel2Index(areas: List<AreaLevel1>, level1AreaId: Int, areaId: Int): Int {
+        val level1 = areas.find { it.id == level1AreaId } ?: return 0
+        val index = level1.list.indexOfFirst { it.id.toIntOrNull() == areaId }
+        return if (index >= 0) index else 0
     }
 }
 

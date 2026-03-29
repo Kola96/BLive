@@ -72,7 +72,7 @@ class MainRepository {
             if (body.code != 0 || body.data == null) {
                 throw IOException(body.message.ifEmpty { "获取分区列表失败" })
             }
-            val originalList = body.data.data
+            val originalList = body.data!!.data
             
             // 为每个一级分区处理二级分区：只取前 10 个，并在前面插入“全部”(id=0)
             val processedList = originalList.map { level1 ->
@@ -81,9 +81,7 @@ class MainRepository {
                 level1.copy(list = limitedLevel2)
             }
             
-            // 在一级分区最前面插入“全部”(id=0)，它不需要二级分区列表
-            val allLevel1 = AreaLevel1(id = 0, name = "全部", list = emptyList())
-            listOf(allLevel1) + processedList
+            processedList
         }
     }
 

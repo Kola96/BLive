@@ -604,7 +604,7 @@
                         android:layout_marginBottom="16dp"
                         android:focusable="true"
                         android:focusableInTouchMode="true"
-                        android:nextFocusDown="@id/main_grid"
+                        android:nextFocusDown="@id/level2_area_grid"
                         android:clipChildren="false"
                         android:clipToPadding="false" />
 
