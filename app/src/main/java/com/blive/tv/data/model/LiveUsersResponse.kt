@@ -47,6 +47,7 @@ data class LiveUserItem(
             coverUrl = resolvedCover,
             anchorName = uname,
             anchorAvatar = resolvedFace,
+            anchorMid = uid,
             roomTitle = title,
             areaName = areaNameV2,
             viewerCount = online,

@@ -1,6 +1,17 @@
 package com.blive.tv.network
 
-import com.blive.tv.data.model.*
+import com.blive.tv.data.model.AuthCodeResponse
+import com.blive.tv.data.model.DanmuInfoResponse
+import com.blive.tv.data.model.LiveRecommendResponse
+import com.blive.tv.data.model.LiveUsersResponse
+import com.blive.tv.data.model.PollLoginResponse
+import com.blive.tv.data.model.RelationModifyResponse
+import com.blive.tv.data.model.RelationResponse
+import com.blive.tv.data.model.RoomBasicInfoResponse
+import com.blive.tv.data.model.RoomPlayInfoResponse
+import com.blive.tv.data.model.SearchLiveResponse
+import com.blive.tv.data.model.UserInfoResponse
+import com.blive.tv.data.model.WebAreaListResponse
 import okhttp3.ResponseBody
 import retrofit2.Call
 import retrofit2.http.FieldMap
@@ -80,4 +91,13 @@ interface ApiService {
     fun getLiveSearch(
         @QueryMap params: Map<String, String>
     ): Call<com.blive.tv.data.model.SearchLiveResponse>
+
+    // 查询关注状态
+    @GET("/x/relation")
+    fun getRelationStatus(@Query("fid") fid: Long): Call<RelationResponse>
+
+    // 关注/取关
+    @FormUrlEncoded
+    @POST("/x/relation/modify")
+    fun modifyRelation(@FieldMap params: Map<String, String>): Call<RelationModifyResponse>
 }

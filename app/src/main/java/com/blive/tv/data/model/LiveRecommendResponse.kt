@@ -57,6 +57,7 @@ fun RecommendRoomItem.toLiveRoom(): LiveRoom {
         coverUrl = resolvedCover,
         anchorName = uname,
         anchorAvatar = resolvedFace,
+        anchorMid = uid,
         roomTitle = title,
         areaName = area,
         viewerCount = online,
