@@ -1075,6 +1075,9 @@ class LivePlayActivity : AppCompatActivity() {
                     return true
                 }
                 if (roomInfoController.isVisible) {
+                    // 重置Overlay隐藏计时器，防止长按过程中闪退
+                    roomInfoController.resetAutoDismissTimer()
+                    
                     // 开始长按检测
                     if (!isCenterKeyDown && !isFollowLoading) {
                         isCenterKeyDown = true
@@ -1159,10 +1162,12 @@ class LivePlayActivity : AppCompatActivity() {
                     // 如果还在加载中（用户提前松手），取消动画
                     isCenterKeyDown = false
                     hideFollowLoading()
+                    roomInfoController.resetAutoDismissTimer()
                     return true
                 }
                 isCenterKeyDown = false
                 if (roomInfoController.isVisible) {
+                    roomInfoController.resetAutoDismissTimer()
                     return true
                 }
             }
@@ -1365,21 +1370,12 @@ class LivePlayActivity : AppCompatActivity() {
         val animationView = roomInfoOverlay.findViewById<FollowButtonView>(R.id.follow_animation_view)
         val contentView = roomInfoOverlay.findViewById<View>(R.id.follow_content)
 
-        // 获取按钮尺寸
-        contentView?.post {
-            val w = contentView.width
-            val h = contentView.height
-            if (w > 0 && h > 0) {
-                // 设置动画视图尺寸和位置覆盖按钮
-                val params = animationView?.layoutParams
-                params?.width = w
-                params?.height = h
-                animationView?.layoutParams = params
-                animationView?.visibility = View.VISIBLE
-                // 开始动画：关注时填充，取关时褪去
-                animationView?.animateToState(!isFollowing, longPressThresholdMs)
-            }
-        }
+        // 动画期间清除内容背景，以露出底部的动画视图
+        contentView?.setBackgroundResource(0)
+
+        animationView?.visibility = View.VISIBLE
+        // 开始动画：关注时填充，取关时褪去
+        animationView?.animateToState(!isFollowing, longPressThresholdMs)
     }
 
     /**

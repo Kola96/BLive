@@ -67,20 +67,23 @@
         <!-- Follow Button Container -->
         <FrameLayout
             android:id="@+id/follow_button_container"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
+            android:layout_width="120dp"
+            android:layout_height="48dp">
 
-            <!-- Text and Icon (below fill animation) -->
+            <!-- Fill Animation View (at the bottom) -->
+            <com.blive.tv.ui.play.FollowButtonView
+                android:id="@+id/follow_animation_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone"/>
+
+            <!-- Text and Icon (on top of fill animation) -->
             <LinearLayout
                 android:id="@+id/follow_content"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
                 android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingStart="20dp"
-                android:paddingEnd="20dp"
-                android:paddingTop="12dp"
-                android:paddingBottom="12dp">
+                android:gravity="center">
 
                 <ImageView
                     android:id="@+id/follow_icon"
@@ -97,13 +100,6 @@
                     android:textColor="#FFFFFF"
                     android:textSize="18sp"/>
             </LinearLayout>
-
-            <!-- Fill Animation View (on top) -->
-            <com.blive.tv.ui.play.FollowButtonView
-                android:id="@+id/follow_animation_view"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:visibility="gone"/>
 
         </FrameLayout>
 

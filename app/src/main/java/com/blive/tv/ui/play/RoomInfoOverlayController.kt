@@ -17,7 +17,7 @@ class RoomInfoOverlayController(
 
     private val handler = Handler(Looper.getMainLooper())
     private val autoDismissRunnable = Runnable { hide() }
-    private val autoDismissDelayMs = 5000L
+    private val autoDismissDelayMs = 15000L
 
     fun show() {
         if (isVisible) {

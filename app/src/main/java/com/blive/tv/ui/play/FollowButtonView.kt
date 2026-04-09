@@ -3,16 +3,15 @@ package com.blive.tv.ui.play
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RectF
-import android.graphics.Shader
 import android.util.AttributeSet
 import android.view.View
 import android.animation.ValueAnimator
+import android.view.animation.LinearInterpolator
 
 /**
- * 自定义关注按钮视图
+ * 自定义关注按钮背景视图
  * 支持从左向右填充/褪去动画
  */
 class FollowButtonView @JvmOverloads constructor(
@@ -25,24 +24,24 @@ class FollowButtonView @JvmOverloads constructor(
     var isFollowing: Boolean = false
         private set
 
-    // 动画进度 0-1
-    private var animationProgress: Float = 0f
+    // 动画进度控制
+    private var leftProgress: Float = 0f
+    private var rightProgress: Float = 0f
 
-    // 是否正在动画
-    private var isAnimating: Boolean = false
-
-    // 动画类型
-    private enum class AnimationType { FILL, CLEAR }
-    private var currentAnimationType: AnimationType = AnimationType.FILL
+    private var startLeft: Float = 0f
+    private var targetLeft: Float = 0f
+    private var startRight: Float = 0f
+    private var targetRight: Float = 0f
 
     private val animator: ValueAnimator = ValueAnimator.ofFloat(0f, 1f)
 
-    // 圆角
-    private val cornerRadius = 48f * resources.displayMetrics.density
+    // 圆角 (24dp 适配 48dp 高度)
+    private val cornerRadius = 24f * resources.displayMetrics.density
 
     // 画笔
     private val solidPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
+        color = Color.parseColor("#FF4081")
     }
 
     private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -57,27 +56,23 @@ class FollowButtonView @JvmOverloads constructor(
     var onAnimationEnd: ((Boolean) -> Unit)? = null
 
     init {
+        animator.interpolator = LinearInterpolator()
         animator.addUpdateListener { animation ->
-            animationProgress = animation.animatedValue as Float
+            val fraction = animation.animatedFraction
+            leftProgress = startLeft + (targetLeft - startLeft) * fraction
+            rightProgress = startRight + (targetRight - startRight) * fraction
             invalidate()
         }
         animator.addListener(object : android.animation.AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: android.animation.Animator) {
-                isAnimating = false
+                // 如果是取关完成，重置进度为 0，以便下次关注能从左向右填充
+                if (!isFollowing && leftProgress == rightProgress) {
+                    leftProgress = 0f
+                    rightProgress = 0f
+                }
                 onAnimationEnd?.invoke(isFollowing)
             }
         })
-    }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        // 固定尺寸
-        val desiredWidth = (120 * resources.displayMetrics.density).toInt()
-        val desiredHeight = (48 * resources.displayMetrics.density).toInt()
-
-        val width = resolveSize(desiredWidth, widthMeasureSpec)
-        val height = resolveSize(desiredHeight, heightMeasureSpec)
-
-        setMeasuredDimension(width, height)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -88,53 +83,16 @@ class FollowButtonView @JvmOverloads constructor(
 
         rect.set(0f, 0f, w, h)
 
-        if (isAnimating) {
-            // 动画中
-            drawAnimatingState(canvas, w, h)
-        } else {
-            // 静态
-            drawStaticState(canvas, w, h)
-        }
-    }
-
-    private fun drawStaticState(canvas: Canvas, w: Float, h: Float) {
-        if (isFollowing) {
-            // 已关注：实心粉色
-            solidPaint.color = Color.parseColor("#FF4081")
-            canvas.drawRoundRect(rect, cornerRadius, cornerRadius, solidPaint)
-            // 画心形和文字（简化）
-        } else {
-            // 未关注：透明背景 + 粉色边框
-            canvas.drawRoundRect(rect, cornerRadius, cornerRadius, borderPaint)
-        }
-    }
-
-    private fun drawAnimatingState(canvas: Canvas, w: Float, h: Float) {
         // 底层：边框（未关注状态的样子）
         borderPaint.alpha = 255
         canvas.drawRoundRect(rect, cornerRadius, cornerRadius, borderPaint)
 
-        // 渐变填充层
-        if (animationProgress > 0) {
-            val shader = if (currentAnimationType == AnimationType.FILL) {
-                // 关注模式：透明 -> 粉色（从左向右填充）
-                LinearGradient(0f, 0f, w, 0f,
-                    intArrayOf(Color.parseColor("#FF4081"), Color.parseColor("#FF4081")),
-                    floatArrayOf(0f, 1f),
-                    Shader.TileMode.CLAMP)
-            } else {
-                // 取关模式：粉色 -> 透明（从左向右褪去）
-                LinearGradient(0f, 0f, w, 0f,
-                    intArrayOf(Color.parseColor("#FF4081"), Color.parseColor("#FF4081")),
-                    floatArrayOf(0f, 1f),
-                    Shader.TileMode.CLAMP)
-            }
-            solidPaint.shader = shader
-
-            // clipRect 从 0 扩展到 w，决定渐变层的可见范围
+        // 填充层
+        if (rightProgress > leftProgress) {
             canvas.save()
-            val clipRight = w * animationProgress
-            canvas.clipRect(0f, 0f, clipRight, h)
+            val clipLeft = w * leftProgress
+            val clipRight = w * rightProgress
+            canvas.clipRect(clipLeft, 0f, clipRight, h)
             canvas.drawRoundRect(rect, cornerRadius, cornerRadius, solidPaint)
             canvas.restore()
         }
@@ -145,20 +103,37 @@ class FollowButtonView @JvmOverloads constructor(
      * @param follow true=关注，false=取关
      */
     fun animateToState(follow: Boolean, duration: Long = 2000L) {
-        if (follow == isFollowing && !isAnimating) {
-            // 已经是目标状态
+        if (follow == isFollowing && leftProgress == targetLeft && rightProgress == targetRight) {
             return
         }
 
-        currentAnimationType = if (follow) AnimationType.FILL else AnimationType.CLEAR
-        isAnimating = true
-        animationProgress = 0f
+        // 如果当前是全空状态，确保从 0,0 开始，以保证自左向右填充
+        if (leftProgress == rightProgress) {
+            leftProgress = 0f
+            rightProgress = 0f
+        }
+
+        startLeft = leftProgress
+        startRight = rightProgress
+
+        if (follow) {
+            // 关注：向右填满
+            targetLeft = 0f
+            targetRight = 1f
+        } else {
+            // 取关：左侧向右追赶，直到褪去
+            targetLeft = rightProgress
+            targetRight = rightProgress
+        }
+
+        val distLeft = Math.abs(targetLeft - startLeft)
+        val distRight = Math.abs(targetRight - startRight)
+        val maxDist = Math.max(distLeft, distRight)
 
         animator.cancel()
-        animator.duration = duration
+        animator.duration = (duration * maxDist).toLong().coerceAtLeast(10L)
         animator.start()
 
-        // 更新状态
         isFollowing = follow
     }
 
@@ -166,12 +141,17 @@ class FollowButtonView @JvmOverloads constructor(
      * 设置状态（无动画）
      */
     fun setFollowingState(following: Boolean) {
-        if (isAnimating) {
-            animator.cancel()
-            isAnimating = false
-        }
+        animator.cancel()
         isFollowing = following
-        animationProgress = 1f
+        if (following) {
+            leftProgress = 0f
+            rightProgress = 1f
+        } else {
+            leftProgress = 0f
+            rightProgress = 0f
+        }
+        targetLeft = leftProgress
+        targetRight = rightProgress
         invalidate()
     }
 
