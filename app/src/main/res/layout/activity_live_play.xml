@@ -132,4 +132,8 @@
 
     </FrameLayout>
 
+    <include
+        layout="@layout/room_info_overlay"
+        android:id="@+id/room_info_overlay"/>
+
 </FrameLayout>

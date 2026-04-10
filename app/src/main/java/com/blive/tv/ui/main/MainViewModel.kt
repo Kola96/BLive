@@ -177,7 +177,7 @@ class MainViewModel(
         _screenState.update {
             it.copy(
                 isLoadingFollowing = true,
-                followingListState = if (it.followingRooms.isNotEmpty()) LiveListState.Content else LiveListState.Loading
+                followingListState = LiveListState.Loading
             )
         }
         viewModelScope.launch {

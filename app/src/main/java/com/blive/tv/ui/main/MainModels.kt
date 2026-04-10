@@ -7,6 +7,7 @@ data class LiveRoom(
     val coverUrl: String,
     val anchorName: String,
     val anchorAvatar: String,
+    val anchorMid: Long = 0L,
     val roomTitle: String,
     val areaName: String,
     val viewerCount: Long = 0L,

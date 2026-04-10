@@ -283,16 +283,19 @@ class MainActivity : AppCompatActivity() {
                     viewModel.onPartitionGridBackRequested()
                 }
             },
-            onRoomClicked = { roomId ->
-                lastClickedRoomId = roomId
+            onRoomClicked = { liveRoom ->
+                lastClickedRoomId = liveRoom.roomId
                 lastPlayEntryTab = currentTab
-                lastPlayEntryRoomId = roomId
-                val clickedPosition = liveRoomAdapter.getPositionByRoomId(roomId)
+                lastPlayEntryRoomId = liveRoom.roomId
+                val clickedPosition = liveRoomAdapter.getPositionByRoomId(liveRoom.roomId)
                 if (clickedPosition >= 0) {
-                    viewModel.onGridFocused(currentTab, clickedPosition, roomId)
+                    viewModel.onGridFocused(currentTab, clickedPosition, liveRoom.roomId)
                 }
                 val intent = Intent(this, LivePlayActivity::class.java)
-                intent.putExtra("room_id", roomId)
+                intent.putExtra("room_id", liveRoom.roomId)
+                intent.putExtra(LivePlayActivity.EXTRA_ANCHOR_MID, liveRoom.anchorMid)
+                intent.putExtra(LivePlayActivity.EXTRA_ANCHOR_NAME, liveRoom.anchorName)
+                intent.putExtra(LivePlayActivity.EXTRA_ROOM_TITLE, liveRoom.roomTitle)
                 livePlayLauncher.launch(intent)
             },
             onNavigateToTab = { viewModel.onNavigateBackToTab() },

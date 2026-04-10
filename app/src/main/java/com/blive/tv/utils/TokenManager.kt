@@ -146,6 +146,11 @@ object TokenManager {
         return getCookieJar(context)?.find("SESSDATA")?.value
     }
 
+    // 获取CSRF Token (bili_jct)
+    fun getCsrfToken(context: Context): String? {
+        return getCookieJar(context)?.find("bili_jct")?.value
+    }
+
     private fun mergeCookies(existing: List<AuthCookie>, updates: List<AuthCookie>): List<AuthCookie> {
         val now = System.currentTimeMillis()
         val cookieMap = linkedMapOf<String, AuthCookie>()

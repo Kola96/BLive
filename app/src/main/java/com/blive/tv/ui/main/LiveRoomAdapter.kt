@@ -15,7 +15,7 @@ import com.bumptech.glide.Glide
 class LiveRoomAdapter(
     private var columnCount: Int,
     private val onFirstRowUp: (Int) -> Unit,
-    private val onRoomClicked: (Long) -> Unit,
+    private val onRoomClicked: (LiveRoom) -> Unit,
     private val onNavigateToTab: () -> Unit,
     private val onRoomFocused: (Int, Long) -> Unit
 ) : RecyclerView.Adapter<LiveRoomAdapter.LiveRoomViewHolder>() {
@@ -105,7 +105,7 @@ class LiveRoomAdapter(
                 val pos = bindingAdapterPosition
                 if (pos in liveRooms.indices) {
                     val liveRoom = liveRooms[pos]
-                    onRoomClicked(liveRoom.roomId)
+                    onRoomClicked(liveRoom)
                 }
             }
 

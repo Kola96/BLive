@@ -26,6 +26,7 @@ import com.blive.tv.danmu.DanmuMessage
 import com.blive.tv.danmu.DanmuTcpClient
 import com.blive.tv.danmu.SimpleDanmuView
 import com.blive.tv.network.RetrofitClient
+import com.blive.tv.utils.TokenManager
 import com.blive.tv.utils.ToastHelper
 import com.blive.tv.utils.UserPreferencesManager
 
@@ -38,6 +39,8 @@ class LivePlayActivity : AppCompatActivity() {
     private lateinit var playSettingsRecyclerView: RecyclerView
     private lateinit var danmuSettingsRecyclerView: RecyclerView
     private lateinit var simpleDanmuView: SimpleDanmuView
+    private lateinit var roomInfoOverlay: View
+    private lateinit var roomInfoController: RoomInfoOverlayController
     
     private var player: ExoPlayer? = null
     private var helperPlayer: ExoPlayer? = null
@@ -80,9 +83,29 @@ class LivePlayActivity : AppCompatActivity() {
     private lateinit var playSettingsAdapter: PlaySettingsCategoryAdapter
     private lateinit var danmuSettingsAdapter: PlaySettingsCategoryAdapter
     private lateinit var settingsPanelController: PlaySettingsPanelController
+
+    // 房间信息相关
+    private var anchorMid: Long = 0L
+    private var anchorName: String = ""
+    private var roomTitle: String = ""
+    private var isFollowing: Boolean = false
+    private var isFollowLoading: Boolean = false
     private val streamResolver = PlayStreamResolver()
 
+    // 长按检测相关
+    private var isCenterKeyDown: Boolean = false
+    private var centerKeyDownTime: Long = 0L
+    private val followActionRunnable = Runnable {
+        if (isCenterKeyDown && roomInfoController.isVisible) {
+            completeFollowAction()
+        }
+    }
+    private val longPressThresholdMs: Long = 2000L
+
     companion object {
+        const val EXTRA_ANCHOR_MID = "anchor_mid"
+        const val EXTRA_ANCHOR_NAME = "anchor_name"
+        const val EXTRA_ROOM_TITLE = "room_title"
         private const val TAG = "LivePlayActivity"
         private const val CATEGORY_QUALITY = "quality"
         private const val CATEGORY_CDN = "cdn"
@@ -142,6 +165,20 @@ class LivePlayActivity : AppCompatActivity() {
             qualityCategoryId = CATEGORY_QUALITY,
             logTag = TAG
         )
+
+        // 获取房间信息
+        anchorMid = intent.getLongExtra(EXTRA_ANCHOR_MID, 0L)
+        anchorName = intent.getStringExtra(EXTRA_ANCHOR_NAME) ?: ""
+        roomTitle = intent.getStringExtra(EXTRA_ROOM_TITLE) ?: ""
+
+        // 初始化房间信息Overlay
+        roomInfoOverlay = findViewById(R.id.room_info_overlay)
+        roomInfoController = RoomInfoOverlayController(
+            roomInfoOverlay = roomInfoOverlay,
+            playerView = playerView,
+            logTag = TAG
+        )
+
         fetchRoomPlayInfo(currentRoomId)
     }
     
@@ -1038,10 +1075,33 @@ class LivePlayActivity : AppCompatActivity() {
             }
             KeyEvent.KEYCODE_DPAD_CENTER -> {
                 Log.d(TAG, "CENTER key pressed")
-                // 焦点有效，让默认处理（例如点击当前焦点项）
+                if (!settingsPanelController.isVisible && !roomInfoController.isVisible) {
+                    showRoomInfoOverlay()
+                    return true
+                }
+                if (roomInfoController.isVisible) {
+                    // 重置Overlay隐藏计时器，防止长按过程中闪退
+                    roomInfoController.resetAutoDismissTimer()
+                    
+                    // 开始长按检测
+                    if (!isCenterKeyDown && !isFollowLoading) {
+                        isCenterKeyDown = true
+                        centerKeyDownTime = System.currentTimeMillis()
+                        // 立即开始加载动画（旋转）
+                        startFollowLoadingAnimation()
+                        // 清除之前的长按任务，重新开始计时
+                        roomInfoOverlay.removeCallbacks(followActionRunnable)
+                        roomInfoOverlay.postDelayed(followActionRunnable, longPressThresholdMs)
+                    }
+                    return true
+                }
                 return super.onKeyDown(keyCode, event)
             }
             KeyEvent.KEYCODE_BACK -> {
+                if (roomInfoController.isVisible) {
+                    roomInfoController.hide()
+                    return true
+                }
                 if (settingsPanelController.isVisible) {
                     if (currentExpandedCategory != null) {
                         collapseAllCategories(focusCategoryId = currentExpandedCategory)
@@ -1065,16 +1125,266 @@ class LivePlayActivity : AppCompatActivity() {
             }
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 Log.d(TAG, "DPAD_DOWN key pressed")
+                if (roomInfoController.isVisible) {
+                    // Overlay显示时，DOWN键消费掉，不传递给设置面板
+                    return true
+                }
                 if (!settingsPanelController.isVisible) {
                     settingsPanelController.show()
                     return true
                 }
             }
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                Log.d(TAG, "DPAD_UP key pressed")
+                if (roomInfoController.isVisible) {
+                    // Overlay显示时，UP键隐藏overlay
+                    roomInfoController.hide()
+                    return true
+                }
+                if (!settingsPanelController.isVisible && !roomInfoController.isVisible) {
+                    showRoomInfoOverlay()
+                    return true
+                }
+            }
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 Log.d(TAG, "DPAD key pressed: $keyCode")
+                if (roomInfoController.isVisible) {
+                    // Overlay显示时，LEFT/RIGHT键消费掉
+                    return true
+                }
             }
         }
         return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_CENTER -> {
+                if (isFollowLoading) {
+                    // 如果还在加载中（用户提前松手），取消动画并移除长按任务
+                    isCenterKeyDown = false
+                    roomInfoOverlay.removeCallbacks(followActionRunnable)
+                    hideFollowLoading()
+                    roomInfoController.resetAutoDismissTimer()
+                    return true
+                }
+                isCenterKeyDown = false
+                roomInfoOverlay.removeCallbacks(followActionRunnable)
+                if (roomInfoController.isVisible) {
+                    roomInfoController.resetAutoDismissTimer()
+                    return true
+                }
+            }
+        }
+        return super.onKeyUp(keyCode, event)
+    }
+
+    /**
+     * 显示房间信息Overlay
+     */
+    private fun showRoomInfoOverlay() {
+        // 更新UI文本
+        roomInfoOverlay.findViewById<TextView>(R.id.room_title)?.text = roomTitle
+        roomInfoOverlay.findViewById<TextView>(R.id.anchor_name)?.text = anchorName
+
+        // 显示提示文字
+        roomInfoOverlay.findViewById<TextView>(R.id.hint_text)?.visibility = View.VISIBLE
+
+        // 获取anchorMid（如果intent没有传入，尝试从API响应获取）
+        if (anchorMid == 0L) {
+            response?.data?.uid?.let { uid ->
+                anchorMid = uid
+            }
+        }
+
+        // 如果有anchorMid，先获取关注状态
+        if (anchorMid > 0) {
+            fetchFollowStatus()
+        } else {
+            // 没有anchorMid时显示默认状态
+            updateFollowButtonUI(false)
+            hideFollowLoading()
+        }
+
+        roomInfoController.show()
+    }
+
+    /**
+     * 获取关注状态
+     */
+    private fun fetchFollowStatus() {
+        if (anchorMid == 0L) return
+
+        RetrofitClient.apiService.getRelationStatus(anchorMid).enqueue(
+            object : retrofit2.Callback<com.blive.tv.data.model.RelationResponse> {
+                override fun onResponse(
+                    call: retrofit2.Call<com.blive.tv.data.model.RelationResponse>,
+                    response: retrofit2.Response<com.blive.tv.data.model.RelationResponse>
+                ) {
+                    if (response.isSuccessful && response.body()?.code == 0) {
+                        val attribute = response.body()?.data?.attribute ?: 0
+                        isFollowing = attribute == 2 || attribute == 6
+                        updateFollowButtonUI(isFollowing)
+                        hideFollowLoading()
+                        Log.d(TAG, "获取关注状态成功: isFollowing=$isFollowing, attribute=$attribute")
+                    } else {
+                        Log.e(TAG, "获取关注状态失败: ${response.body()?.message}")
+                        hideFollowLoading()
+                    }
+                }
+
+                override fun onFailure(
+                    call: retrofit2.Call<com.blive.tv.data.model.RelationResponse>,
+                    t: Throwable
+                ) {
+                    Log.e(TAG, "获取关注状态网络错误", t)
+                    hideFollowLoading()
+                }
+            }
+        )
+    }
+
+    /**
+     * 处理关注长按（长按OK键触发）
+     */
+    /**
+     * 长按完成，执行关注/取关操作（动画已在长按开始时启动）
+     */
+    private fun completeFollowAction() {
+        if (!TokenManager.isLoggedIn(this)) {
+            ToastHelper.showTextToast(this, "请先登录")
+            hideFollowLoading()
+            isCenterKeyDown = false
+            return
+        }
+
+        if (anchorMid == 0L) {
+            ToastHelper.showTextToast(this, "无法获取主播信息")
+            hideFollowLoading()
+            isCenterKeyDown = false
+            return
+        }
+
+        val newFollowState = !isFollowing
+        // 执行关注/取关操作
+        performFollowAction(newFollowState)
+    }
+
+    /**
+     * 执行关注/取关操作
+     */
+    private fun performFollowAction(follow: Boolean) {
+        val csrf = TokenManager.getCsrfToken(this)
+        if (csrf.isNullOrEmpty()) {
+            ToastHelper.showTextToast(this, "无法获取登录凭证")
+            hideFollowLoading()
+            return
+        }
+
+        val params = mapOf(
+            "fid" to anchorMid.toString(),
+            "act" to if (follow) "1" else "2",
+            "csrf" to csrf,
+            "re_src" to "14"
+        )
+
+        RetrofitClient.apiService.modifyRelation(params).enqueue(
+            object : retrofit2.Callback<com.blive.tv.data.model.RelationModifyResponse> {
+                override fun onResponse(
+                    call: retrofit2.Call<com.blive.tv.data.model.RelationModifyResponse>,
+                    response: retrofit2.Response<com.blive.tv.data.model.RelationModifyResponse>
+                ) {
+                    isFollowLoading = false
+                    if (response.isSuccessful && response.body()?.code == 0) {
+                        isFollowing = follow
+                        val msg = if (follow) "关注成功" else "取消关注成功"
+                        ToastHelper.showTextToast(this@LivePlayActivity, msg)
+                        Log.d(TAG, "关注操作成功: follow=$follow")
+                        // 显示状态转变动画
+                        completeFollowStateChange(follow)
+                    } else {
+                        val errorMsg = response.body()?.message ?: "操作失败"
+                        ToastHelper.showTextToast(this@LivePlayActivity, errorMsg)
+                        Log.e(TAG, "关注操作失败: $errorMsg")
+                        hideFollowLoading()
+                    }
+                }
+
+                override fun onFailure(
+                    call: retrofit2.Call<com.blive.tv.data.model.RelationModifyResponse>,
+                    t: Throwable
+                ) {
+                    isFollowLoading = false
+                    ToastHelper.showTextToast(this@LivePlayActivity, "网络错误")
+                    Log.e(TAG, "关注操作网络错误", t)
+                    hideFollowLoading()
+                }
+            }
+        )
+    }
+
+    /**
+     * 开始关注加载动画（从左向右填充覆盖）
+     */
+    /**
+     * 更新关注按钮UI
+     */
+    private fun updateFollowButtonUI(following: Boolean) {
+        val followContent = roomInfoOverlay.findViewById<View>(R.id.follow_content)
+        val followText = roomInfoOverlay.findViewById<TextView>(R.id.follow_text)
+        val followIcon = roomInfoOverlay.findViewById<android.widget.ImageView>(R.id.follow_icon)
+        val hintText = roomInfoOverlay.findViewById<TextView>(R.id.hint_text)
+
+        if (following) {
+            followContent?.setBackgroundResource(R.drawable.follow_solid_background)
+            followText?.text = "已关注"
+            followIcon?.setImageResource(R.drawable.ic_heart_filled)
+            hintText?.text = "长按确认键取关"
+        } else {
+            followContent?.setBackgroundResource(R.drawable.follow_border_background)
+            followText?.text = "关注"
+            followIcon?.setImageResource(R.drawable.ic_lucide_heart)
+            hintText?.text = "长按确认键关注"
+        }
+    }
+
+    /**
+     * 隐藏关注加载状态
+     */
+    private fun hideFollowLoading() {
+        isFollowLoading = false
+        val animationView = roomInfoOverlay.findViewById<FollowButtonView>(R.id.follow_animation_view)
+        animationView?.setFollowingState(isFollowing)
+        animationView?.visibility = View.GONE
+        updateFollowButtonUI(isFollowing)
+    }
+
+    /**
+     * 完成关注状态转变
+     */
+    private fun completeFollowStateChange(following: Boolean) {
+        isFollowLoading = false
+        isFollowing = following
+        val animationView = roomInfoOverlay.findViewById<FollowButtonView>(R.id.follow_animation_view)
+        animationView?.setFollowingState(following)
+        animationView?.visibility = View.GONE
+        updateFollowButtonUI(following)
+    }
+
+    /**
+     * 开始关注加载动画
+     */
+    private fun startFollowLoadingAnimation() {
+        isFollowLoading = true
+        val animationView = roomInfoOverlay.findViewById<FollowButtonView>(R.id.follow_animation_view)
+        val contentView = roomInfoOverlay.findViewById<View>(R.id.follow_content)
+
+        // 动画期间清除内容背景，以露出底部的动画视图
+        contentView?.setBackgroundResource(0)
+
+        animationView?.visibility = View.VISIBLE
+        // 开始动画：关注时填充，取关时褪去
+        animationView?.animateToState(!isFollowing, longPressThresholdMs)
     }
 
     /**
