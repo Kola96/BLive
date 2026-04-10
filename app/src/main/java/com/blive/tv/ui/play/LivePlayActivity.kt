@@ -95,6 +95,11 @@ class LivePlayActivity : AppCompatActivity() {
     // 长按检测相关
     private var isCenterKeyDown: Boolean = false
     private var centerKeyDownTime: Long = 0L
+    private val followActionRunnable = Runnable {
+        if (isCenterKeyDown && roomInfoController.isVisible) {
+            completeFollowAction()
+        }
+    }
     private val longPressThresholdMs: Long = 2000L
 
     companion object {
@@ -1084,12 +1089,9 @@ class LivePlayActivity : AppCompatActivity() {
                         centerKeyDownTime = System.currentTimeMillis()
                         // 立即开始加载动画（旋转）
                         startFollowLoadingAnimation()
-                        // 延迟发送长按完成事件
-                        roomInfoOverlay.postDelayed({
-                            if (isCenterKeyDown && roomInfoController.isVisible) {
-                                completeFollowAction()
-                            }
-                        }, longPressThresholdMs)
+                        // 清除之前的长按任务，重新开始计时
+                        roomInfoOverlay.removeCallbacks(followActionRunnable)
+                        roomInfoOverlay.postDelayed(followActionRunnable, longPressThresholdMs)
                     }
                     return true
                 }
@@ -1159,13 +1161,15 @@ class LivePlayActivity : AppCompatActivity() {
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_CENTER -> {
                 if (isFollowLoading) {
-                    // 如果还在加载中（用户提前松手），取消动画
+                    // 如果还在加载中（用户提前松手），取消动画并移除长按任务
                     isCenterKeyDown = false
+                    roomInfoOverlay.removeCallbacks(followActionRunnable)
                     hideFollowLoading()
                     roomInfoController.resetAutoDismissTimer()
                     return true
                 }
                 isCenterKeyDown = false
+                roomInfoOverlay.removeCallbacks(followActionRunnable)
                 if (roomInfoController.isVisible) {
                     roomInfoController.resetAutoDismissTimer()
                     return true
@@ -1347,6 +1351,7 @@ class LivePlayActivity : AppCompatActivity() {
     private fun hideFollowLoading() {
         isFollowLoading = false
         val animationView = roomInfoOverlay.findViewById<FollowButtonView>(R.id.follow_animation_view)
+        animationView?.setFollowingState(isFollowing)
         animationView?.visibility = View.GONE
         updateFollowButtonUI(isFollowing)
     }
@@ -1358,6 +1363,7 @@ class LivePlayActivity : AppCompatActivity() {
         isFollowLoading = false
         isFollowing = following
         val animationView = roomInfoOverlay.findViewById<FollowButtonView>(R.id.follow_animation_view)
+        animationView?.setFollowingState(following)
         animationView?.visibility = View.GONE
         updateFollowButtonUI(following)
     }
