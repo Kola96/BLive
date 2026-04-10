@@ -64,57 +64,65 @@
                 android:textStyle="bold"/>
         </LinearLayout>
 
-        <!-- Follow Button Container -->
-        <FrameLayout
-            android:id="@+id/follow_button_container"
-            android:layout_width="120dp"
-            android:layout_height="48dp">
+        <!-- Right Side: Follow Button & Hint -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
 
-            <!-- Fill Animation View (at the bottom) -->
-            <com.blive.tv.ui.play.FollowButtonView
-                android:id="@+id/follow_animation_view"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
+            <!-- Follow Button Container -->
+            <FrameLayout
+                android:id="@+id/follow_button_container"
+                android:layout_width="120dp"
+                android:layout_height="48dp">
+
+                <!-- Fill Animation View (at the bottom) -->
+                <com.blive.tv.ui.play.FollowButtonView
+                    android:id="@+id/follow_animation_view"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone"/>
+
+                <!-- Text and Icon (on top of fill animation) -->
+                <LinearLayout
+                    android:id="@+id/follow_content"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="horizontal"
+                    android:gravity="center">
+
+                    <ImageView
+                        android:id="@+id/follow_icon"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_lucide_heart"
+                        android:layout_marginEnd="8dp"/>
+
+                    <TextView
+                        android:id="@+id/follow_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="关注"
+                        android:textColor="#FFFFFF"
+                        android:textSize="18sp"/>
+                </LinearLayout>
+
+            </FrameLayout>
+
+            <!-- Hint Text: Long press to toggle -->
+            <TextView
+                android:id="@+id/hint_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="长按关注"
+                android:textColor="#88FFFFFF"
+                android:textSize="14sp"
                 android:visibility="gone"/>
 
-            <!-- Text and Icon (on top of fill animation) -->
-            <LinearLayout
-                android:id="@+id/follow_content"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="horizontal"
-                android:gravity="center">
-
-                <ImageView
-                    android:id="@+id/follow_icon"
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@drawable/ic_lucide_heart"
-                    android:layout_marginEnd="8dp"/>
-
-                <TextView
-                    android:id="@+id/follow_text"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="关注"
-                    android:textColor="#FFFFFF"
-                    android:textSize="18sp"/>
-            </LinearLayout>
-
-        </FrameLayout>
+        </LinearLayout>
 
     </LinearLayout>
-
-    <!-- Hint Text: Long press to toggle -->
-    <TextView
-        android:id="@+id/hint_text"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="100dp"
-        android:text="长按OK键切换关注状态"
-        android:textColor="#88FFFFFF"
-        android:textSize="14sp"
-        android:visibility="gone"/>
 
 </FrameLayout>

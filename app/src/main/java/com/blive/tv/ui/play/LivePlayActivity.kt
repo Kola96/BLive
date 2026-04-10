@@ -1333,15 +1333,18 @@ class LivePlayActivity : AppCompatActivity() {
         val followContent = roomInfoOverlay.findViewById<View>(R.id.follow_content)
         val followText = roomInfoOverlay.findViewById<TextView>(R.id.follow_text)
         val followIcon = roomInfoOverlay.findViewById<android.widget.ImageView>(R.id.follow_icon)
+        val hintText = roomInfoOverlay.findViewById<TextView>(R.id.hint_text)
 
         if (following) {
             followContent?.setBackgroundResource(R.drawable.follow_solid_background)
             followText?.text = "已关注"
             followIcon?.setImageResource(R.drawable.ic_heart_filled)
+            hintText?.text = "长按取关"
         } else {
             followContent?.setBackgroundResource(R.drawable.follow_border_background)
             followText?.text = "关注"
             followIcon?.setImageResource(R.drawable.ic_lucide_heart)
+            hintText?.text = "长按关注"
         }
     }
 

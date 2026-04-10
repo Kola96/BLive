@@ -3,9 +3,11 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Kotlin](https://img.shields.io/badge/Language-Kotlin-orange.svg)](https://kotlinlang.org/)
 [![Platform](https://img.shields.io/badge/Platform-Android%20TV-green.svg)](https://developer.android.com/tv)
-[![API](https://img.shields.io/badge/API-21%2B-brightgreen.svg)](https://android-arsenal.com/api?level=21)
+
 
 **BLive** 是一款开源、无广告的 **第三方 Bilibili (B站) 直播客户端**，专为 **Android TV** 和 **电视盒子** 设计。
+
+> 🤖 **这是一个纯 Vibe Coding 项目**：本项目的所有代码（包括架构设计、UI 实现、业务逻辑等）均由 AI 辅助生成和重构。通过自然语言交互，实现了从需求到可运行应用的完整开发流程。
 
 它基于 Google 官方的 **Leanback** 架构开发，遵循 Material Design 设计规范，为您提供流畅、纯净的大屏直播观看体验。支持 **4K/1080P 高清画质**、**实时弹幕**、**扫码登录** 以及 **遥控器完美适配**。
 
@@ -25,8 +27,14 @@
 ### 扫码登录
 ![扫码登录](docs/pics/扫码登录.png)
 
-### 关注列表
-![关注列表](docs/pics/关注列表.png)
+### 推荐直播间列表
+![推荐直播间列表](docs/pics/推荐直播间列表.png)
+
+### 分区直播间列表页
+![分区直播间列表页](docs/pics/分区直播间列表页.png)
+
+### 搜索页
+![搜索页](docs/pics/搜索页.png)
 
 ### 播放界面
 ![播放界面](docs/pics/播放界面.png)

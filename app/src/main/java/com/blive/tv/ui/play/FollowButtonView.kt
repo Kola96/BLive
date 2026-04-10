@@ -81,11 +81,15 @@ class FollowButtonView @JvmOverloads constructor(
 
         if (w <= 0 || h <= 0) return
 
-        rect.set(0f, 0f, w, h)
-
         // 底层：边框（未关注状态的样子）
+        // 边框描边是居中绘制的，为了和 XML 的 shape 完美对齐，需要向内偏移半个线宽
+        val halfStroke = borderPaint.strokeWidth / 2f
+        rect.set(halfStroke, halfStroke, w - halfStroke, h - halfStroke)
+        
         borderPaint.alpha = 255
-        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, borderPaint)
+        // 对于向内偏移的边框，圆角也需减去偏移量，以保持内外弧度一致
+        val borderCorner = cornerRadius - halfStroke
+        canvas.drawRoundRect(rect, borderCorner, borderCorner, borderPaint)
 
         // 填充层
         if (rightProgress > leftProgress) {
@@ -93,6 +97,9 @@ class FollowButtonView @JvmOverloads constructor(
             val clipLeft = w * leftProgress
             val clipRight = w * rightProgress
             canvas.clipRect(clipLeft, 0f, clipRight, h)
+            
+            // 填充层应铺满整个控件，所以 rect 不偏移
+            rect.set(0f, 0f, w, h)
             canvas.drawRoundRect(rect, cornerRadius, cornerRadius, solidPaint)
             canvas.restore()
         }
