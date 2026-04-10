@@ -15,7 +15,9 @@ data class PlaySettingsOption(
     override val id: String,
     val name: String,
     val isSelected: Boolean,
-    val categoryId: String = "" // 关联的分类ID
+    val categoryId: String = "", // 关联的分类ID
+    val isEffective: Boolean = true,
+    val fallbackHint: String? = null
 ) : SettingsItem
 
 data class QualityOption(

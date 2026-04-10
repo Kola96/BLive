@@ -258,8 +258,8 @@ class LivePlayActivity : AppCompatActivity() {
             CATEGORY_QUALITY -> {
                 selectedQn = option.id.toInt()
                 Log.d(TAG, "切换清晰度: ${option.name} ($selectedQn)")
-                rebuildAndPlayUrl()
                 updateCategories(focusTargetId = option.id)
+                fetchRoomPlayInfoForQualityChange(currentRoomId, selectedQn)
             }
             CATEGORY_CDN -> {
                 selectedCdnHost = option.id
@@ -348,42 +348,23 @@ class LivePlayActivity : AppCompatActivity() {
         
         // 构建播放设置显示列表
         val playDisplayList = mutableListOf<SettingsItem>()
-        val data = response?.data
         
         for (category in playCategories) {
             playDisplayList.add(category)
             if (category.isExpanded) {
                 when (category.id) {
                     CATEGORY_QUALITY -> {
-                        val filteredOptions = qualityOptions.filter { option ->
-                            data != null && 
-                            streamResolver.findStreamUrl(data, "http_stream", "flv", selectedCodec, option.qn, selectedCdnHost).isNotEmpty() ||
-                            data != null && 
-                            streamResolver.findStreamUrl(data, "http_stream", "ts", selectedCodec, option.qn, selectedCdnHost).isNotEmpty()
-                        }
-                        playDisplayList.addAll(filteredOptions.map { 
+                        playDisplayList.addAll(qualityOptions.map {
                             PlaySettingsOption(it.qn.toString(), it.name, it.qn == selectedQn, category.id) 
                         })
                     }
                     CATEGORY_CDN -> {
-                        val filteredOptions = cdnOptions.filter { option ->
-                            data != null && 
-                            streamResolver.findStreamUrl(data, "http_stream", "flv", selectedCodec, selectedQn, option.host).isNotEmpty() ||
-                            data != null && 
-                            streamResolver.findStreamUrl(data, "http_stream", "ts", selectedCodec, selectedQn, option.host).isNotEmpty()
-                        }
-                        playDisplayList.addAll(filteredOptions.map { 
+                        playDisplayList.addAll(cdnOptions.map {
                             PlaySettingsOption(it.host, it.cdnName, it.host == selectedCdnHost, category.id) 
                         })
                     }
                     CATEGORY_CODEC -> {
-                        val filteredOptions = codecOptions.filter { option ->
-                            data != null && 
-                            streamResolver.findStreamUrl(data, "http_stream", "flv", option.codecName, selectedQn, selectedCdnHost).isNotEmpty() ||
-                            data != null && 
-                            streamResolver.findStreamUrl(data, "http_stream", "ts", option.codecName, selectedQn, selectedCdnHost).isNotEmpty()
-                        }
-                        playDisplayList.addAll(filteredOptions.map { 
+                        playDisplayList.addAll(codecOptions.map {
                             PlaySettingsOption(it.codecName, it.displayName, it.codecName == selectedCodec, category.id) 
                         })
                     }
@@ -547,7 +528,11 @@ class LivePlayActivity : AppCompatActivity() {
             Log.d(TAG, "手动切换: 开始无缝切换到 $url")
             prepareHelperPlayer(url)
         } else {
-            ToastHelper.showTextToast(this, "该配置下没有可用的流")
+            ToastHelper.showTextToast(this, "当前画质无可用流")
+            response?.let {
+                parsePlayOptions(it)
+                updateCategories()
+            }
         }
     }
     
@@ -565,8 +550,8 @@ class LivePlayActivity : AppCompatActivity() {
     }
 
     private fun fetchRoomPlayInfo(roomId: Long) {
-        Log.d(TAG, "请求直播间播放信息，roomId: $roomId")
-        RetrofitClient.liveApiService.getRoomPlayInfo(roomId).enqueue(
+        Log.d(TAG, "请求直播间播放信息，roomId: $roomId, qn: $selectedQn")
+        RetrofitClient.liveApiService.getRoomPlayInfo(roomId, qn = selectedQn).enqueue(
             object : retrofit2.Callback<RoomPlayInfoResponse> {
                 override fun onResponse(
                     call: retrofit2.Call<RoomPlayInfoResponse>,
@@ -644,13 +629,31 @@ class LivePlayActivity : AppCompatActivity() {
     
     private fun parsePlayOptions(response: RoomPlayInfoResponse) {
         val data = response.data ?: return
-        val prefQn = UserPreferencesManager.getQualityQn(this)
-        val parseResult = streamResolver.parseOptions(data, prefQn, selectedCdnHost, selectedCodec)
-        selectedQn = parseResult.selectedQn
-        selectedCdnHost = parseResult.selectedCdnHost
-        qualityOptions = parseResult.qualityOptions
-        cdnOptions = parseResult.cdnOptions
-        codecOptions = parseResult.codecOptions
+        val graph = streamResolver.buildCapabilityGraph(data)
+        capabilityGraph = graph
+
+        val resolved = streamResolver.resolveSelection(
+            graph = graph,
+            request = SelectionRequest(
+                targetQn = selectedQn,
+                preferredCodec = selectedCodec,
+                currentCdnHost = selectedCdnHost
+            )
+        )
+        if (resolved != null) {
+            selectedQn = resolved.resolvedQn
+            selectedCodec = resolved.resolvedCodec
+            selectedCdnHost = resolved.resolvedCdnHost
+        }
+        val panelOptions = streamResolver.buildPanelOptions(
+            graph = graph,
+            selectedQn = selectedQn,
+            selectedCodec = selectedCodec,
+            selectedCdnHost = selectedCdnHost
+        )
+        qualityOptions = panelOptions.qualityOptions
+        cdnOptions = panelOptions.cdnOptions
+        codecOptions = panelOptions.codecOptions
         
         Log.d(TAG, "解析到 ${qualityOptions.size} 个清晰度选项")
         Log.d(TAG, "解析到 ${cdnOptions.size} 个CDN选项")
@@ -698,10 +701,25 @@ class LivePlayActivity : AppCompatActivity() {
     
     private fun buildPlayUrlWithSelection(): String {
         val data = response?.data ?: return ""
-        return streamResolver.buildPreferredUrl(data, selectedCodec, selectedQn, selectedCdnHost)
+        val graph = capabilityGraph ?: streamResolver.buildCapabilityGraph(data).also {
+            capabilityGraph = it
+        }
+        val resolved = streamResolver.resolveSelection(
+            graph = graph,
+            request = SelectionRequest(
+                targetQn = selectedQn,
+                preferredCodec = selectedCodec,
+                currentCdnHost = selectedCdnHost
+            )
+        ) ?: return ""
+        selectedQn = resolved.resolvedQn
+        selectedCodec = resolved.resolvedCodec
+        selectedCdnHost = resolved.resolvedCdnHost
+        return resolved.url
     }
     
     private var response: RoomPlayInfoResponse? = null
+    private var capabilityGraph: CapabilityGraph? = null
 
     private fun buildAllPlayUrls(response: RoomPlayInfoResponse): List<String> {
         val data = response.data ?: return emptyList()
@@ -1492,24 +1510,20 @@ class LivePlayActivity : AppCompatActivity() {
     }
 
     private fun fetchRoomPlayInfoForRefresh(roomId: Long) {
-        RetrofitClient.liveApiService.getRoomPlayInfo(roomId).enqueue(
+        RetrofitClient.liveApiService.getRoomPlayInfo(roomId, qn = selectedQn).enqueue(
             object : retrofit2.Callback<RoomPlayInfoResponse> {
                 override fun onResponse(call: retrofit2.Call<RoomPlayInfoResponse>, response: retrofit2.Response<RoomPlayInfoResponse>) {
                     if (response.isSuccessful && response.body()?.code == 0) {
                         val playInfoResponse = response.body()!!
-                        val data = playInfoResponse.data
-                        if (data != null) {
-                             var url = streamResolver.findStreamUrl(data, "http_stream", "flv", selectedCodec, selectedQn, selectedCdnHost)
-                             if (url.isEmpty()) {
-                                 url = streamResolver.findStreamUrl(data, "http_stream", "ts", selectedCodec, selectedQn, selectedCdnHost)
-                             }
-                             
-                             if (url.isNotEmpty()) {
-                                 prepareHelperPlayer(url)
-                             } else {
-                                 Log.e(TAG, "刷新失败：找不到匹配当前设置的流地址")
-                                 scheduleRetry()
-                             }
+                        this@LivePlayActivity.response = playInfoResponse
+                        parsePlayOptions(playInfoResponse)
+                        updateCategories()
+                        val url = buildPlayUrlWithSelection()
+                        if (url.isNotEmpty()) {
+                            prepareHelperPlayer(url)
+                        } else {
+                            Log.e(TAG, "刷新失败：当前画质无可用流")
+                            scheduleRetry()
                         }
                     } else {
                         Log.e(TAG, "刷新失败：API请求错误")
@@ -1531,6 +1545,40 @@ class LivePlayActivity : AppCompatActivity() {
             override fun onTick(m: Long) {}
             override fun onFinish() { startSeamlessRefresh() }
         }.start()
+    }
+
+    private fun fetchRoomPlayInfoForQualityChange(roomId: Long, qn: Int) {
+        Log.d(TAG, "因切换画质，重新请求播放信息，roomId: $roomId, qn: $qn")
+        
+        RetrofitClient.liveApiService.getRoomPlayInfo(roomId, qn = qn).enqueue(
+            object : retrofit2.Callback<RoomPlayInfoResponse> {
+                override fun onResponse(
+                    call: retrofit2.Call<RoomPlayInfoResponse>,
+                    response: retrofit2.Response<RoomPlayInfoResponse>
+                ) {
+                    if (response.isSuccessful && response.body()?.code == 0) {
+                        val playInfoResponse = response.body()!!
+                        this@LivePlayActivity.response = playInfoResponse
+                        val data = playInfoResponse.data
+                        if (data != null) {
+                            parsePlayOptions(playInfoResponse)
+                            updateCategories(focusTargetId = qn.toString())
+                            rebuildAndPlayUrl()
+                        } else {
+                            ToastHelper.showTextToast(this@LivePlayActivity, "当前画质无可用流")
+                            parsePlayOptions(playInfoResponse)
+                            updateCategories(focusTargetId = qn.toString())
+                        }
+                    } else {
+                        ToastHelper.showTextToast(this@LivePlayActivity, "获取画质信息失败")
+                    }
+                }
+
+                override fun onFailure(call: retrofit2.Call<RoomPlayInfoResponse>, t: Throwable) {
+                    ToastHelper.showTextToast(this@LivePlayActivity, "网络错误，切换失败")
+                }
+            }
+        )
     }
     
     private fun prepareHelperPlayer(url: String) {
