@@ -13,3 +13,5 @@ local.properties
 gradle-8.5/
 app/build/
 app/*.jks
+
+.claude/
