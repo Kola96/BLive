@@ -1339,12 +1339,12 @@ class LivePlayActivity : AppCompatActivity() {
             followContent?.setBackgroundResource(R.drawable.follow_solid_background)
             followText?.text = "已关注"
             followIcon?.setImageResource(R.drawable.ic_heart_filled)
-            hintText?.text = "长按取关"
+            hintText?.text = "长按确认键取关"
         } else {
             followContent?.setBackgroundResource(R.drawable.follow_border_background)
             followText?.text = "关注"
             followIcon?.setImageResource(R.drawable.ic_lucide_heart)
-            hintText?.text = "长按关注"
+            hintText?.text = "长按确认键关注"
         }
     }
 
