@@ -133,11 +133,8 @@ class PlayStreamResolver {
         } else {
             graph.capabilities.map { it.codecName }.toSet()
         }
-        val cdnSet = if (qnCapabilities.isNotEmpty()) {
-            qnCapabilities.map { it.cdnHost }.toSet()
-        } else {
-            graph.capabilities.map { it.cdnHost }.toSet()
-        }
+        // 线路选项严格跟随当前清晰度，仅展示该清晰度可用线路
+        val cdnSet = qnCapabilities.map { it.cdnHost }.toSet()
 
         val codecOptions = buildCodecPriority(codecSet, selectedCodec).map { codecName ->
             CodecOption(codecName, codecDisplayName(codecName), isSelected = codecName == selectedCodec)
