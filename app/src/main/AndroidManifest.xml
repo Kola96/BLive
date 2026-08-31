@@ -24,6 +24,10 @@
             android:theme="@style/Theme.BLiveTV.Leanback">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+                <!-- 同时声明标准 LAUNCHER 与 LEANBACK_LAUNCHER：
+                     标准 TV 桌面（如 Android TV 原生 Leanback）识别 LEANBACK_LAUNCHER，
+                     而极米 GMUI 等厂商定制桌面只识别 LAUNCHER，缺省会导致应用图标不显示 -->
+                <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
