@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
+import android.view.WindowManager
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -114,6 +115,8 @@ class LivePlayActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 直播播放页保持屏幕常亮，防止观看期间系统无操作超时自动休眠（在极米等投影仪上尤为明显）
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_live_play)
 
         playerView = findViewById(R.id.player_view)
