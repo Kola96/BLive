@@ -1,29 +1,34 @@
 package com.blive.tv.danmu
 
 import android.util.Log
+import com.blive.tv.network.RetrofitClient
+import com.blive.tv.network.WbiKeyParser
+import com.blive.tv.network.WbiSigner
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
-import java.io.ByteArrayOutputStream
+import java.io.EOFException
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.net.SocketTimeoutException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.security.MessageDigest
-import java.util.Base64
-import java.util.Date
-import kotlin.random.Random
 
 /**
- * B站弹幕TCP客户端
+ * B站弹幕TCP客户端（纯协程实现）
+ *
+ * - [start] 启动会话协程，内部带指数退避自动重连；重复调用安全（幂等）。
+ * - [stop] 取消当前会话并关闭 socket，scope 保活，可随时再次 [start]。
+ * - 网络预备（BUVid / WBI 签名 / 弹幕服务器信息）统一走 RetrofitClient(OkHttp)，
+ *   WBI 签名复用 [WbiSigner]，不再手写 HttpURLConnection。
+ * - 敏感信息（token、WBI key、响应体）不输出日志。
  */
 class DanmuTcpClient(
     private val roomId: Long,
@@ -31,632 +36,320 @@ class DanmuTcpClient(
     private val onConnectionStatusChanged: (Boolean) -> Unit,
     private val onLog: ((String) -> Unit)? = null
 ) {
-    private val TAG = "DanmuTcpClient"
-    private val scope = CoroutineScope(Dispatchers.IO + Job())
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val danmuParser = DanmuParser()
+
+    private var sessionJob: Job? = null
+
+    /** 当前会话使用的 socket，关闭它可打断阻塞中的 read。仅通过 [closeSocket] 清理。 */
+    private val socketLock = Any()
     private var socket: Socket? = null
     private var inputStream: InputStream? = null
     private var outputStream: OutputStream? = null
-    private var isConnected = false
+
+    /** 心跳与认证包都可能写 outputStream，写操作需串行化避免帧交错 */
+    private val writeLock = Any()
+
+    @Volatile
+    private var connected: Boolean = false
+
+    // 会话级凭据，每次重连刷新
     private var buvid: String? = null
     private var token: String? = null
-    private var serverHost: String = "broadcastlv.chat.bilibili.com"
-    private var serverPort: Int = 2243
-    private var heartbeatJob: Job? = null
-    private var receiveJob: Job? = null
 
     private fun log(message: String) {
         Log.d(TAG, message)
         onLog?.invoke(message)
     }
 
-    private fun logError(message: String, e: Throwable? = null) {
-        if (e != null) {
-            Log.e(TAG, message, e)
-            onLog?.invoke("Error: $message - ${e.message}")
-        } else {
-            Log.e(TAG, message)
-            onLog?.invoke("Error: $message")
-        }
-    }
-
-    companion object {
+    private fun logWarn(message: String) {
+        Log.w(TAG, message)
+        onLog?.invoke("Warn: $message")
     }
 
     /**
-     * 启动弹幕客户端
+     * 启动弹幕客户端。已运行中重复调用为 no-op；[stop] 后可再次调用。
      */
     fun start() {
-        log("start()方法被调用，开始启动弹幕客户端")
-        
-        // 直接在IO线程中执行，不使用CoroutineScope，避免协程相关问题
-        Thread {
-            try {
-                log("启动线程执行弹幕客户端连接流程")
-                
-                // 获取BUVid
-                log("准备获取BUVid")
-                if (!getBuvid()) {
-                    logError("获取BUVid失败")
-                    onConnectionStatusChanged(false)
-                    return@Thread
-                }
-
-                // 获取房间信息和Token
-                log("准备获取房间信息和Token")
-                if (!getRoomInfo()) {
-                    logError("获取房间信息失败")
-                    onConnectionStatusChanged(false)
-                    return@Thread
-                }
-
-                // 连接弹幕服务器
-                log("准备连接弹幕服务器")
-                if (!connect()) {
-                    logError("连接弹幕服务器失败")
-                    onConnectionStatusChanged(false)
-                    return@Thread
-                }
-
-                // 发送认证包
-                log("准备发送认证包")
-                sendAuthPacket()
-
-                // 启动心跳
-                log("准备启动心跳")
-                startHeartbeat()
-
-                // 开始接收消息
-                log("准备开始接收消息")
-                startReceiveLoop()
-
-                onConnectionStatusChanged(true)
-                isConnected = true
-            } catch (e: Exception) {
-                logError("启动弹幕客户端失败", e)
-                onConnectionStatusChanged(false)
-                isConnected = false
-            }
-        }.start()
+        if (sessionJob?.isActive == true) {
+            log("弹幕客户端已在运行，忽略重复 start()")
+            return
+        }
+        log("启动弹幕客户端，roomId=$roomId")
+        sessionJob = scope.launch { runSessionLoop() }
     }
 
     /**
-     * 停止弹幕客户端
+     * 停止弹幕客户端。只取消会话协程并关闭 socket，scope 保活可重启。
      */
     fun stop() {
-        scope.cancel()
-        heartbeatJob?.cancel()
-        receiveJob?.cancel()
-        disconnect()
-        onConnectionStatusChanged(false)
-        isConnected = false
+        sessionJob?.cancel()
+        sessionJob = null
+        closeSocket()
+        setConnected(false)
     }
 
-    /**
-     * 获取BUVid
-     */
-    private fun getBuvid(): Boolean {
-        Log.d(TAG, "Step 1: 获取BUVid")
-        try {
-            val url = "https://api.bilibili.com/x/frontend/finger/spi"
-            val headers = mapOf(
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                "Accept" to "application/json, text/plain, */*",
-                "Accept-Language" to "zh-CN,zh;q=0.9",
-                "Origin" to "https://live.bilibili.com",
-                "Referer" to "https://live.bilibili.com/$roomId"
-            )
+    fun isConnected(): Boolean = connected
 
-            val response = HttpRequest.get(url, headers)
-            val responseJson = org.json.JSONObject(response)
-            if (responseJson.getInt("code") == 0) {
-                buvid = responseJson.getJSONObject("data").getString("b_3")
-                Log.d(TAG, "获取到BUVid: $buvid")
-                return true
-            } else {
-                Log.e(TAG, "获取BUVid失败: ${responseJson.getString("message")}")
-                // 失败时生成随机BUVid
-                buvid = "XY${(1..18).map { ('0'..'f').random() }.joinToString("")}infoc"
-                Log.d(TAG, "生成随机BUVid: $buvid")
-                return true
+    private fun setConnected(value: Boolean) {
+        if (connected != value) {
+            connected = value
+            onConnectionStatusChanged(value)
+        }
+    }
+
+    // ---------------- 会话与重连 ----------------
+
+    private suspend fun runSessionLoop() {
+        var backoffMs = RECONNECT_INITIAL_BACKOFF_MS
+        while (currentCoroutineContext().isActive) {
+            try {
+                prepareCredentials()
+                serveConnection()
+                // 连接正常结束（对端关闭）也视为掉线，进入重连
+                logWarn("弹幕连接已断开")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logWarn("弹幕会话异常: ${e.javaClass.simpleName}: ${e.message}")
+            } finally {
+                setConnected(false)
+                closeSocket()
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "获取BUVid异常", e)
-            // 异常时生成随机BUVid
-            buvid = "XY0123456789abcdefinfoc"
-            Log.d(TAG, "使用默认BUVid: $buvid")
-            return true
+
+            if (!currentCoroutineContext().isActive) break
+            log("弹幕 ${backoffMs / 1000}s 后重连")
+            delay(backoffMs)
+            backoffMs = (backoffMs * 2).coerceAtMost(RECONNECT_MAX_BACKOFF_MS)
         }
     }
 
     /**
-     * 获取房间信息和Token
+     * 建立一次完整连接：认证 → 心跳 + 接收循环，直至任一方失败。
      */
-    private fun getRoomInfo(): Boolean {
-        Log.d(TAG, "Step 2: 获取房间 $roomId 的信息和Token")
-        try {
-            // 获取WBI密钥
-            val (imgKey, subKey) = getWbiKeys()
-            Log.d(TAG, "获取到wbi keys: img_key=$imgKey, sub_key=$subKey")
+    private suspend fun serveConnection() {
+        connectSocket()
+        sendAuthPacket()
+        setConnected(true)
+        log("弹幕连接建立成功")
 
-            // 构建请求参数
-            val params = mutableMapOf(
-                "id" to roomId.toString(),
-                "type" to "0",
-                "web_location" to "444.8"
-            )
-
-            // 生成WBI签名
-            val signedParams = encWbi(params, imgKey, subKey)
-            Log.d(TAG, "生成签名参数: $signedParams")
-
-            // 构建请求URL
-            val url = "https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo"
-            val queryString = signedParams.entries.joinToString("&") { "${it.key}=${it.value}" }
-            val fullUrl = "$url?$queryString"
-            Log.d(TAG, "完整请求URL: $fullUrl")
-
-            // 构建请求头
-            val headers = mapOf(
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                "Accept" to "application/json, text/plain, */*",
-                "Accept-Language" to "zh-CN,zh;q=0.9",
-                "Origin" to "https://live.bilibili.com",
-                "Referer" to "https://live.bilibili.com/$roomId",
-                "Cookie" to "LIVE_BUVID=$buvid"
-            )
-            Log.d(TAG, "请求头: $headers")
-
-            Log.d(TAG, "调用API: $fullUrl")
-            val response = HttpRequest.get(fullUrl, headers)
-            Log.d(TAG, "API响应: $response")
-            val responseJson = org.json.JSONObject(response)
-            Log.d(TAG, "响应code: ${responseJson.getInt("code")}, message: ${responseJson.optString("message", "无消息")}")
-
-            if (responseJson.getInt("code") == 0) {
-                val data = responseJson.getJSONObject("data")
-                token = data.getString("token")
-                Log.d(TAG, "获取到Token: $token")
-
-                // 获取服务器信息
-                val hostList = data.getJSONArray("host_list")
-                Log.d(TAG, "服务器列表数量: ${hostList.length()}")
-                if (hostList.length() > 0) {
-                    val hostInfo = hostList.getJSONObject(0)
-                    serverHost = hostInfo.getString("host")
-                    serverPort = hostInfo.getInt("port")
-                    Log.d(TAG, "获取到服务器信息: host=$serverHost, port=$serverPort")
-                }
-
-                return true
-            } else {
-                Log.e(TAG, "获取房间信息失败: code=${responseJson.getInt("code")}, message=${responseJson.optString("message", "无消息")}")
-                return false
+        // 心跳失败时关闭 socket 打断接收循环，由接收循环抛出异常统一进入重连
+        // 注意：心跳协程以当前会话协程为父级，stop() 取消会话时会被一并取消
+        val heartbeatJob = CoroutineScope(currentCoroutineContext()).launch {
+            try {
+                heartbeatLoop()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logWarn("心跳异常，关闭连接以触发重连: ${e.message}")
+                closeSocket()
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "获取房间信息异常", e)
-            return false
         }
-    }
-
-    /**
-     * 获取WBI密钥
-     */
-    private fun getWbiKeys(): Pair<String, String> {
         try {
-            val url = "https://api.bilibili.com/x/web-interface/nav"
-            val headers = mapOf(
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                "Accept" to "application/json, text/plain, */*",
-                "Accept-Language" to "zh-CN,zh;q=0.9",
-                "Referer" to "https://www.bilibili.com/"
-            )
-
-            Log.d(TAG, "开始获取WBI密钥，URL: $url")
-            // Log.d(TAG, "WBI密钥请求头: $headers")
-            val response = HttpRequest.get(url, headers)
-            Log.d(TAG, "WBI密钥API响应完整内容: $response")
-            
-            val responseJson = org.json.JSONObject(response)
-            // Log.d(TAG, "WBI密钥响应code: ${responseJson.getInt("code")}, message: ${responseJson.optString("message", "无消息")}")
-            
-            // if (responseJson.getInt("code") != 0) {
-            //     Log.e(TAG, "获取WBI密钥失败: ${responseJson.optString("message", "无消息")}")
-            //     return Pair("", "")
-            // }
-            
-            val data = responseJson.getJSONObject("data")
-            val wbiImg = data.getJSONObject("wbi_img")
-            val imgUrl = wbiImg.getString("img_url")
-            val subUrl = wbiImg.getString("sub_url")
-            Log.d(TAG, "获取到WBI图片URL: img_url=$imgUrl, sub_url=$subUrl")
-
-            val imgKey = imgUrl.substringAfterLast("/").substringBefore(".")
-            val subKey = subUrl.substringAfterLast("/").substringBefore(".")
-            Log.d(TAG, "解析得到WBI密钥: imgKey=$imgKey, subKey=$subKey")
-
-            return Pair(imgKey, subKey)
-        } catch (e: Exception) {
-            Log.e(TAG, "获取WBI密钥异常，异常类型: ${e.javaClass.simpleName}", e)
-            // 使用默认值，避免崩溃
-            return Pair("", "")
-        }
-    }
-
-    /**
-     * 生成WBI签名
-     */
-    private fun encWbi(params: MutableMap<String, String>, imgKey: String, subKey: String): Map<String, String> {
-        Log.d(TAG, "开始生成WBI签名")
-        Log.d(TAG, "原始参数: $params")
-        Log.d(TAG, "WBI密钥: imgKey=$imgKey, subKey=$subKey")
-        
-        // 添加时间戳
-        val wts = System.currentTimeMillis() / 1000
-        params["wts"] = wts.toString()
-        Log.d(TAG, "添加时间戳wts: $wts")
-
-        // 按照key排序
-        val sortedParams = params.toSortedMap()
-        Log.d(TAG, "排序后的参数: $sortedParams")
-
-        // 过滤value中的特殊字符
-        val filteredParams = sortedParams.mapValues { (_, v) ->
-            v.filter { it !in "!'()*" }
-        }
-        Log.d(TAG, "过滤特殊字符后的参数: $filteredParams")
-
-        // 构建查询字符串，使用URL编码
-        val queryString = filteredParams.entries.joinToString("&") { (key, value) ->
-            val encodedKey = java.net.URLEncoder.encode(key, "UTF-8")
-            val encodedValue = java.net.URLEncoder.encode(value, "UTF-8")
-            "$encodedKey=$encodedValue"
-        }
-        Log.d(TAG, "最终查询字符串: $queryString")
-
-        // 生成签名
-        val origStr = imgKey + subKey
-        Log.d(TAG, "生成mixinKey的原始字符串: $origStr")
-        val mixinKey = getMixinKey(origStr)
-        Log.d(TAG, "生成的mixinKey: $mixinKey")
-        
-        val signInput = queryString + mixinKey
-        Log.d(TAG, "生成WBI签名的输入: $signInput")
-        val wbiSign = md5(signInput)
-        Log.d(TAG, "生成的WBI签名(w_rid): $wbiSign")
-
-        // 添加签名到参数
-        val result = filteredParams.toMutableMap()
-        result["w_rid"] = wbiSign
-        Log.d(TAG, "最终签名参数: $result")
-
-        return result
-    }
-
-    /**
-     * 对imgKey和subKey进行字符顺序打乱编码
-     */
-    private fun getMixinKey(orig: String): String {
-        Log.d(TAG, "进入getMixinKey，原始字符串: '$orig'，长度: ${orig.length}")
-        
-        val mixinKeyEncTab = intArrayOf(
-            46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49,
-            33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40,
-            61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11,
-            36, 20, 34, 44, 52
-        )
-
-        // 处理orig为空字符串的情况
-        if (orig.isEmpty()) {
-            Log.d(TAG, "orig字符串为空，直接返回空字符串")
-            return ""
-        }
-
-        val mappedChars = mixinKeyEncTab.take(32).mapIndexedNotNull { tabIndex, index ->
-            val char = if (index < orig.length) {
-                orig[index]
-            } else {
-                null
-            }
-            Log.d(TAG, "mixinKeyEncTab[$tabIndex] = $index, 对应orig字符: $char")
-            char
-        }
-        
-        val result = mappedChars.joinToString("")
-        Log.d(TAG, "生成的mixinKey: '$result'，长度: ${result.length}")
-        return result
-    }
-
-    /**
-     * MD5加密
-     */
-    private fun md5(input: String): String {
-        val md = MessageDigest.getInstance("MD5")
-        val digest = md.digest(input.toByteArray())
-        return digest.joinToString("") { "%02x".format(it) }
-    }
-
-    /**
-     * 连接弹幕服务器
-     */
-    private fun connect(): Boolean {
-        log("Step 3: 连接弹幕服务器 $serverHost:$serverPort")
-        try {
-            socket = Socket()
-            // 连接超时由connect方法的参数控制
-            socket?.connect(InetSocketAddress(serverHost, serverPort), 5000)
-            // 连接成功后，设置读取超时为60秒（心跳间隔是30秒，给足余量，防止没有弹幕时误判断开）
-            socket?.soTimeout = 60000
-            inputStream = socket?.getInputStream()
-            outputStream = socket?.getOutputStream()
-            log("连接弹幕服务器成功")
-            return true
-        } catch (e: SocketTimeoutException) {
-            logError("连接弹幕服务器超时", e)
-            disconnect()
-            return false
-        } catch (e: Exception) {
-            logError("连接弹幕服务器异常", e)
-            disconnect()
-            return false
-        }
-    }
-
-    /**
-     * 断开连接
-     */
-    private fun disconnect() {
-        try {
-            heartbeatJob?.cancel()
-            receiveJob?.cancel()
-            inputStream?.close()
-            outputStream?.close()
-            socket?.close()
-        } catch (e: Exception) {
-            Log.e(TAG, "断开连接异常", e)
+            receiveLoop()
         } finally {
+            heartbeatJob.cancel()
+        }
+    }
+
+    // ---------------- 连接预备 ----------------
+
+    private fun prepareCredentials() {
+        buvid = fetchBuvid()
+
+        val navResponse = RetrofitClient.apiService.getNavInfo().execute()
+        val navBody = navResponse.body()
+        if (!navResponse.isSuccessful || navBody == null || navBody.code != 0 || navBody.data == null) {
+            throw IllegalStateException("获取WBI密钥失败: http=${navResponse.code()}")
+        }
+        val imgKey = WbiKeyParser.parseFromUrl(navBody.data.wbiImg?.imgUrl.orEmpty())
+        val subKey = WbiKeyParser.parseFromUrl(navBody.data.wbiImg?.subUrl.orEmpty())
+        if (imgKey.isEmpty() || subKey.isEmpty()) {
+            throw IllegalStateException("解析WBI密钥失败")
+        }
+
+        val unsignedParams = mutableMapOf(
+            "id" to roomId.toString(),
+            "type" to "0",
+            "web_location" to "444.8"
+        )
+        val (wRid, wts) = WbiSigner.sign(unsignedParams, imgKey, subKey)
+        val requestParams = unsignedParams.toMutableMap()
+        requestParams["w_rid"] = wRid
+        requestParams["wts"] = wts
+
+        val danmuResponse = RetrofitClient.liveApiService.getDanmuInfoSigned(requestParams).execute()
+        val danmuBody = danmuResponse.body()
+        if (!danmuResponse.isSuccessful || danmuBody == null || danmuBody.code != 0) {
+            throw IllegalStateException("获取弹幕服务器信息失败: http=${danmuResponse.code()}")
+        }
+        val data = danmuBody.data ?: throw IllegalStateException("弹幕服务器信息为空")
+        token = data.token ?: throw IllegalStateException("弹幕token为空")
+        val hostInfo = data.hostList?.firstOrNull()
+        val host = hostInfo?.host
+        if (!host.isNullOrEmpty()) {
+            serverHost = host
+            serverPort = hostInfo.port
+        }
+    }
+
+    private var serverHost: String = DEFAULT_SERVER_HOST
+    private var serverPort: Int = DEFAULT_SERVER_PORT
+
+    private fun fetchBuvid(): String {
+        return try {
+            val response = RetrofitClient.apiService.getFingerSpiRaw().execute()
+            val body = response.body()?.string().orEmpty()
+            val b3 = runCatching {
+                org.json.JSONObject(body).getJSONObject("data").getString("b_3")
+            }.getOrNull()
+            if (!b3.isNullOrEmpty()) b3 else randomBuvid()
+        } catch (e: Exception) {
+            logWarn("获取BUVid失败，使用随机值: ${e.message}")
+            randomBuvid()
+        }
+    }
+
+    private fun randomBuvid(): String {
+        val randomPart = (1..18).joinToString("") { ('0'..'f').random().toString() }
+        return "XY${randomPart}infoc"
+    }
+
+    // ---------------- Socket 与协议 ----------------
+
+    private fun connectSocket() {
+        val newSocket = Socket()
+        newSocket.connect(InetSocketAddress(serverHost, serverPort), CONNECT_TIMEOUT_MS)
+        // 心跳间隔30s，读超时给足余量，防止没有弹幕时误判掉线
+        newSocket.soTimeout = READ_TIMEOUT_MS
+        synchronized(socketLock) {
+            socket = newSocket
+            inputStream = newSocket.getInputStream()
+            outputStream = newSocket.getOutputStream()
+        }
+    }
+
+    private fun closeSocket() {
+        synchronized(socketLock) {
+            try {
+                inputStream?.close()
+            } catch (_: Exception) {
+            }
+            try {
+                outputStream?.close()
+            } catch (_: Exception) {
+            }
+            try {
+                socket?.close()
+            } catch (_: Exception) {
+            }
             inputStream = null
             outputStream = null
             socket = null
-            isConnected = false
         }
     }
 
-    /**
-     * 发送认证包
-     */
-    private fun sendAuthPacket() {
-        Log.e(TAG, "Step 4: 发送认证包")
-        try {
-            // 使用正确的协议版本1，认证请求中的protover字段才是3
-            val authJson = buildAuthJson()
-            Log.e(TAG, "认证包JSON: $authJson")
-            // 根据Python代码和日志，认证包的action应该是7
-            sendPacket(7, authJson.toByteArray(), 1)
-            Log.e(TAG, "认证包发送成功")
-        } catch (e: Exception) {
-            Log.e(TAG, "发送认证包异常", e)
-        }
-    }
-
-    /**
-     * 构建认证JSON
-     */
     private fun buildAuthJson(): String {
-        // 按照字母顺序排序，与Python代码保持一致
+        // 字段按字母序排列，与官方协议示例保持一致
         return "{\"buvid\":\"$buvid\",\"key\":\"$token\",\"platform\":\"danmuji\",\"protover\":3,\"roomid\":$roomId,\"type\":2,\"uid\":0}"
     }
 
-    /**
-     * 发送数据包
-     */
-    private fun sendPacket(action: Int, body: ByteArray, version: Short = 1) {
-        val packetLength = 16 + body.size
+    private fun sendAuthPacket() {
+        synchronized(writeLock) {
+            writePacket(OP_AUTH, buildAuthJson().toByteArray(Charsets.UTF_8), PROTOCOL_VERSION_PLAIN)
+        }
+    }
+
+    private suspend fun heartbeatLoop() {
+        while (currentCoroutineContext().isActive) {
+            synchronized(writeLock) {
+                writePacket(OP_HEARTBEAT, HEARTBEAT_BODY, PROTOCOL_VERSION_PLAIN)
+            }
+            delay(HEARTBEAT_INTERVAL_MS)
+        }
+    }
+
+    private fun writePacket(operation: Int, body: ByteArray, version: Short) {
+        val packetLength = HEADER_SIZE + body.size
         val buffer = ByteBuffer.allocate(packetLength).order(ByteOrder.BIG_ENDIAN)
         buffer.putInt(packetLength)
-            .putShort(16)
+            .putShort(HEADER_SIZE.toShort())
             .putShort(version)
-            .putInt(action)
-            .putInt(1)
+            .putInt(operation)
+            .putInt(SEQUENCE)
             .put(body)
-        outputStream?.write(buffer.array())
-        outputStream?.flush()
+        val out = outputStream ?: throw IllegalStateException("outputStream is null")
+        out.write(buffer.array())
+        out.flush()
     }
 
-    /**
-     * 开始心跳
-     */
-    private fun startHeartbeat() {
-        log("Step 5: 开始心跳")
-        heartbeatJob = scope.launch {
-            while (isActive) {
-                try {
-                    // 心跳包操作码应该是2，内容通常为"[object Object]"
-                    sendPacket(2, "[object Object]".toByteArray())
-                    log("发送心跳包")
-                    delay(30000) // 30秒发送一次心跳
-                } catch (e: Exception) {
-                    logError("发送心跳包异常", e)
-                    break
-                }
+    private suspend fun receiveLoop() {
+        while (currentCoroutineContext().isActive) {
+            val packet = readPacket()
+            val messages = runCatching { danmuParser.parseBinaryData(packet) }
+                .onFailure { logWarn("解析弹幕包失败: ${it.message}") }
+                .getOrDefault(emptyList())
+            if (messages.isNotEmpty()) {
+                onDanmuReceived(messages)
             }
         }
     }
 
-    /**
-     * 开始接收消息循环
-     */
-    private fun startReceiveLoop() {
-        log("Step 6: 开始接收消息")
-        receiveJob = scope.launch {
-            try {
-                log("接收消息循环开始运行")
-                while (isActive) {
-                    log("准备读取数据包")
-                    // 读取数据包，readPacket()现在会抛出异常而不是返回null
-                    val packet = readPacket()
-                    log("成功读取到一个数据包，长度: ${packet.size} 字节")
-                    // 处理数据包
-                    handlePacket(packet)
-                }
-            } catch (e: SocketTimeoutException) {
-                logError("接收消息超时，连接可能已关闭", e)
-                onConnectionStatusChanged(false)
-                disconnect()
-            } catch (e: Exception) {
-                logError("接收消息异常", e)
-                onConnectionStatusChanged(false)
-                disconnect()
-            }
-        }
-    }
-
-    /**
-     * 读取数据包
-     */
     private fun readPacket(): ByteArray {
-        val input = inputStream ?: run {
-            Log.e(TAG, "inputStream为null，无法读取数据包")
-            throw IllegalStateException("inputStream is null")
-        }
-        val header = ByteArray(16)
-        
-        Log.d(TAG, "开始读取数据包包头，期望读取16字节")
-        // 读取包头
-        val headerRead = input.read(header)
-        Log.d(TAG, "实际读取到的包头字节数: $headerRead")
-        if (headerRead == -1) {
-            Log.e(TAG, "读取包头失败，连接已关闭")
-            throw SocketTimeoutException("Connection closed by server")
-        }
-        if (headerRead != 16) {
-            Log.e(TAG, "读取包头失败，实际读取了$headerRead 字节，期望16字节")
-            throw IllegalStateException("Failed to read header")
-        }
+        val input = inputStream ?: throw IllegalStateException("inputStream is null")
+        val header = ByteArray(HEADER_SIZE)
+        readFully(input, header, 0, HEADER_SIZE)
 
-        // 解析包头
-        val buffer = ByteBuffer.wrap(header).order(ByteOrder.BIG_ENDIAN)
-        val packetLength = buffer.getInt()
-        val headerLength = buffer.getShort().toInt()
-        val version = buffer.getShort()
-        val action = buffer.getInt()
-        val param = buffer.getInt()
-        val bodyLength = packetLength - 16
-        
-        Log.d(TAG, "解析包头成功: packetLength=$packetLength, headerLength=$headerLength, version=$version, action=$action, param=$param, bodyLength=$bodyLength")
+        val headerBuffer = ByteBuffer.wrap(header).order(ByteOrder.BIG_ENDIAN)
+        val packetLength = headerBuffer.getInt()
+        headerBuffer.getShort() // headerLength，恒为16
+        headerBuffer.getShort() // version
+        headerBuffer.getInt()   // operation
+        headerBuffer.getInt()   // sequence
+        val bodyLength = packetLength - HEADER_SIZE
+        require(bodyLength >= 0) { "非法包长度: $packetLength" }
 
-        // 读取包体
         val body = ByteArray(bodyLength)
-        var totalRead = 0
-        Log.d(TAG, "开始读取包体，期望读取$bodyLength 字节")
-        while (totalRead < bodyLength) {
-            val read = input.read(body, totalRead, bodyLength - totalRead)
-            if (read == -1) {
-                Log.e(TAG, "读取包体失败，连接已关闭，当前已读取$totalRead/$bodyLength 字节")
-                throw SocketTimeoutException("Connection closed by server")
-            }
-            totalRead += read
-            Log.d(TAG, "已读取$totalRead/$bodyLength 字节")
-        }
-        Log.d(TAG, "包体读取完成，成功读取$totalRead 字节")
+        readFully(input, body, 0, bodyLength)
 
-        // 合并包头和包体
         val packet = ByteArray(packetLength)
-        System.arraycopy(header, 0, packet, 0, 16)
-        System.arraycopy(body, 0, packet, 16, bodyLength)
-        
-        Log.d(TAG, "数据包组装完成，准备返回")
+        System.arraycopy(header, 0, packet, 0, HEADER_SIZE)
+        System.arraycopy(body, 0, packet, HEADER_SIZE, bodyLength)
         return packet
     }
 
     /**
-     * 处理数据包
+     * InputStream.read 不保证填满缓冲区，TCP 分包时必须循环读取，
+     * 否则会把正常的分包误判为连接异常。
      */
-    private fun handlePacket(packet: ByteArray) {
-        try {
-            Log.d(TAG, "开始处理数据包，准备调用DanmuParser解析")
-            val messages = danmuParser.parseBinaryData(packet)
-            Log.d(TAG, "DanmuParser解析完成，返回 ${messages.size} 条弹幕消息")
-            if (messages.isNotEmpty()) {
-                Log.d(TAG, "解析到 ${messages.size} 条弹幕消息，准备调用onDanmuReceived回调")
-                onDanmuReceived(messages)
-                Log.d(TAG, "onDanmuReceived回调调用完成")
-            } else {
-                Log.d(TAG, "未解析到弹幕消息，messages列表为空")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "处理数据包异常，异常类型: ${e.javaClass.simpleName}", e)
-            Log.e(TAG, "异常详情: ${e.message}")
-            val stackTrace = e.stackTrace.joinToString("\n")
-            Log.e(TAG, "异常堆栈: $stackTrace")
+    private fun readFully(input: InputStream, buffer: ByteArray, offset: Int, length: Int) {
+        var totalRead = 0
+        while (totalRead < length) {
+            val read = input.read(buffer, offset + totalRead, length - totalRead)
+            if (read == -1) throw EOFException("连接已被服务器关闭")
+            totalRead += read
         }
     }
 
-    /**
-     * 获取连接状态
-     */
-    fun isConnected(): Boolean {
-        return isConnected
-    }
+    companion object {
+        private const val TAG = "DanmuTcpClient"
 
-    /**
-     * HTTP请求工具类
-     */
-    private object HttpRequest {
-        fun get(url: String, headers: Map<String, String>): String {
-            val TAG = "DanmuHttpRequest"
-            Log.d(TAG, "发起GET请求: $url")
-            Log.d(TAG, "请求头: $headers")
-            
-            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.connectTimeout = 5000
-            connection.readTimeout = 5000
+        // 弹幕协议常量
+        private const val HEADER_SIZE = 16
+        private const val SEQUENCE = 1
+        private const val OP_HEARTBEAT = 2
+        private const val OP_AUTH = 7
+        private const val PROTOCOL_VERSION_PLAIN: Short = 1
+        private val HEARTBEAT_BODY = "[object Object]".toByteArray(Charsets.UTF_8)
 
-            try {
-                // 添加请求头
-                headers.forEach { (key, value) ->
-                    connection.setRequestProperty(key, value)
-                    // Log.d(TAG, "添加请求头: $key = $value")
-                }
+        private const val DEFAULT_SERVER_HOST = "broadcastlv.chat.bilibili.com"
+        private const val DEFAULT_SERVER_PORT = 2243
 
-                // 发送请求
-                connection.connect()
-                val responseCode = connection.responseCode
-                // Log.d(TAG, "HTTP响应码: $responseCode")
-                
-                // 获取响应头
-                val responseHeaders = connection.headerFields
-                // Log.d(TAG, "响应头: $responseHeaders")
+        private const val CONNECT_TIMEOUT_MS = 5_000
+        private const val READ_TIMEOUT_MS = 60_000
+        private const val HEARTBEAT_INTERVAL_MS = 30_000L
 
-                if (responseCode != 200) {
-                    // 读取错误响应
-                    val errorStream = connection.errorStream
-                    val errorContent = errorStream?.use { it.readBytes() }?.toString(Charsets.UTF_8) ?: ""
-                    connection.disconnect()
-                    Log.e(TAG, "HTTP请求失败，响应码: $responseCode，错误内容: $errorContent")
-                    throw Exception("HTTP请求失败，响应码: $responseCode，错误内容: $errorContent")
-                }
-
-                // 读取响应
-                val inputStream = connection.inputStream
-                val outputStream = ByteArrayOutputStream()
-                val buffer = ByteArray(1024)
-                var length: Int
-                while (inputStream.read(buffer).also { length = it } != -1) {
-                    outputStream.write(buffer, 0, length)
-                }
-                inputStream.close()
-                connection.disconnect()
-
-                val responseContent = outputStream.toString(Charsets.UTF_8.name())
-                Log.d(TAG, "HTTP响应内容: $responseContent")
-                return responseContent
-            } catch (e: Exception) {
-                Log.e(TAG, "HTTP请求异常，异常类型: ${e.javaClass.simpleName}", e)
-                connection.disconnect()
-                throw e
-            }
-        }
+        private const val RECONNECT_INITIAL_BACKOFF_MS = 1_000L
+        private const val RECONNECT_MAX_BACKOFF_MS = 30_000L
     }
 }

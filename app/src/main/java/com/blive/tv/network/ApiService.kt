@@ -86,6 +86,10 @@ interface ApiService {
         @Query("type") type: Int = 0
     ): Call<com.blive.tv.data.model.DanmuInfoResponse>
 
+    // 获取弹幕服务器信息（WBI 签名，含 host_list 与 token）
+    @GET("/xlive/web-room/v1/index/getDanmuInfo")
+    fun getDanmuInfoSigned(@QueryMap params: Map<String, String>): Call<com.blive.tv.data.model.DanmuInfoResponse>
+
     // 搜索直播间
     @GET("/x/web-interface/wbi/search/type")
     fun getLiveSearch(

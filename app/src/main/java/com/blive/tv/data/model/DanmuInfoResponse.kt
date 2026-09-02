@@ -38,7 +38,7 @@ class DanmuInfoData {
     @SerializedName("host")
     var host: String? = null
     
-    @SerializedName("host_server_list")
+    @SerializedName(value = "host_list", alternate = ["host_server_list"])
     var hostList: List<DanmuHostInfo>? = null
     
     @SerializedName("server_list")
