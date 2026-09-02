@@ -1,6 +1,5 @@
 *.iml
 .gradle
-/local.properties
 /.idea/
 .DS_Store
 /build
@@ -8,16 +7,17 @@
 .externalNativeBuild
 .cxx
 local.properties
-.trae/
-.qoder/
 gradle-8.5/
 app/build/
 app/*.jks
 
+# AI 工具目录
+.trae/
+.qoder/
 .claude/
+.workbuddy/
 
 # Python E2E 测试
 __pycache__/
 .pytest_cache/
 .venv/
-tests/e2e/.venv/
