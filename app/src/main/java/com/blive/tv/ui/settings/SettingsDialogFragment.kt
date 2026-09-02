@@ -25,7 +25,13 @@ class SettingsDialogFragment : DialogFragment() {
     
     private lateinit var containerDanmakuAlpha: LinearLayout
     private lateinit var tvDanmakuAlphaValue: TextView
-    
+
+    private lateinit var containerDanmakuSpeed: LinearLayout
+    private lateinit var tvDanmakuSpeedValue: TextView
+
+    private lateinit var containerDanmakuArea: LinearLayout
+    private lateinit var tvDanmakuAreaValue: TextView
+
     private lateinit var btnClose: Button
 
     private val qualityMap = mapOf(
@@ -41,6 +47,8 @@ class SettingsDialogFragment : DialogFragment() {
     // 与LivePlayActivity对齐的弹幕选项
     private val danmakuSizes = listOf(0.5f, 0.75f, 1.0f, 1.5f, 2.0f)
     private val danmakuAlphas = listOf(0.25f, 0.5f, 0.75f, 1.0f)
+    private val danmakuSpeeds = listOf(0.5f, 1.0f, 1.5f, 2.0f)
+    private val danmakuAreas = listOf(1.0f, 0.5f, 0.25f)
 
     override fun onStart() {
         super.onStart()
@@ -77,13 +85,21 @@ class SettingsDialogFragment : DialogFragment() {
         
         containerDanmakuAlpha = view.findViewById(R.id.container_danmaku_alpha)
         tvDanmakuAlphaValue = view.findViewById(R.id.tv_danmaku_alpha_value)
-        
+
+        containerDanmakuSpeed = view.findViewById(R.id.container_danmaku_speed)
+        tvDanmakuSpeedValue = view.findViewById(R.id.tv_danmaku_speed_value)
+
+        containerDanmakuArea = view.findViewById(R.id.container_danmaku_area)
+        tvDanmakuAreaValue = view.findViewById(R.id.tv_danmaku_area_value)
+
         btnClose = view.findViewById(R.id.btn_close)
 
         setupQualityControl()
         setupDanmakuSwitchControl()
         setupDanmakuSizeControl()
         setupDanmakuAlphaControl()
+        setupDanmakuSpeedControl()
+        setupDanmakuAreaControl()
 
         btnClose.setOnClickListener {
             dismiss()
@@ -262,5 +278,86 @@ class SettingsDialogFragment : DialogFragment() {
         val currentAlpha = UserPreferencesManager.getDanmakuAlpha(requireContext())
         val percent = (currentAlpha * 100).toInt()
         tvDanmakuAlphaValue.text = "$percent%"
+    }
+
+    // ---------------- 速度/区域：通用循环选项控制 ----------------
+
+    private fun setupDanmakuSpeedControl() {
+        setupCyclingControl(
+            container = containerDanmakuSpeed,
+            valueView = tvDanmakuSpeedValue,
+            options = danmakuSpeeds,
+            read = { UserPreferencesManager.getDanmakuSpeed(requireContext()) },
+            write = { UserPreferencesManager.setDanmakuSpeed(requireContext(), it) },
+            display = { speed ->
+                when (speed) {
+                    0.5f -> "慢速"
+                    1.5f -> "快速"
+                    2.0f -> "极速"
+                    else -> "正常"
+                }
+            }
+        )
+    }
+
+    private fun setupDanmakuAreaControl() {
+        setupCyclingControl(
+            container = containerDanmakuArea,
+            valueView = tvDanmakuAreaValue,
+            options = danmakuAreas,
+            read = { UserPreferencesManager.getDanmakuArea(requireContext()) },
+            write = { UserPreferencesManager.setDanmakuArea(requireContext(), it) },
+            display = { area ->
+                when (area) {
+                    0.5f -> "半屏"
+                    0.25f -> "1/4屏"
+                    else -> "全屏"
+                }
+            }
+        )
+    }
+
+    /** 左右键/点击循环切换档位 */
+    private fun setupCyclingControl(
+        container: LinearLayout,
+        valueView: TextView,
+        options: List<Float>,
+        read: () -> Float,
+        write: (Float) -> Unit,
+        display: (Float) -> String
+    ) {
+        fun updateDisplay() {
+            valueView.text = display(read())
+        }
+
+        fun change(direction: Int) {
+            val current = read()
+            var currentIndex = options.indexOfFirst { Math.abs(it - current) < 0.01f }
+            if (currentIndex == -1) {
+                // 历史遗留值：吸附到最近档位
+                currentIndex = options.indexOf(options.minByOrNull { Math.abs(it - current) })
+            }
+            val newIndex = (currentIndex + direction).coerceIn(0, options.size - 1)
+            write(options[newIndex])
+            updateDisplay()
+        }
+
+        updateDisplay()
+        container.setOnClickListener { change(1) }
+        container.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        change(-1)
+                        return@setOnKeyListener true
+                    }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        change(1)
+                        return@setOnKeyListener true
+                    }
+                }
+            }
+            false
+        }
     }
 }

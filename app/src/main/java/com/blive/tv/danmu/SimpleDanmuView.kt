@@ -62,6 +62,20 @@ class SimpleDanmuView @JvmOverloads constructor(
         
     var danmuSpeedScale = 1.0f // 速度缩放比例 (数值越大越快)
 
+    /**
+     * 弹幕显示区域占屏比例：1.0=全屏，0.5=上半屏，0.25=顶部四分之一。
+     * 只影响新发射弹幕的轨道布局，已在屏弹幕自然飞完。
+     */
+    var danmuAreaRatio = 1.0f
+        set(value) {
+            field = value.coerceIn(MIN_AREA_RATIO, 1.0f)
+            ensureTracksReady(forceRebuild = true)
+        }
+
+    /** 弹幕可用高度（轨道只布局在顶部区域内） */
+    private val effectiveDanmuHeight: Int
+        get() = (height * danmuAreaRatio).toInt().coerceAtLeast(1)
+
     companion object {
         private const val DEFAULT_TRACK_COUNT = 10
         private const val MIN_TRACK_COUNT = 4
@@ -69,6 +83,7 @@ class SimpleDanmuView @JvmOverloads constructor(
         private const val BASE_TEXT_SP = 20f
         private const val TRACK_HEIGHT_RATIO = 1.6f
         private const val MAX_POOL_SIZE = 20
+        private const val MIN_AREA_RATIO = 0.1f
     }
 
     init {
@@ -119,8 +134,8 @@ class SimpleDanmuView @JvmOverloads constructor(
         val viewWidth = textView.measuredWidth
         val viewHeight = textView.measuredHeight
 
-        // 计算轨道高度
-        val trackHeight = (height / currentTrackCount).coerceAtLeast(1)
+        // 计算轨道高度（限制在显示区域内）
+        val trackHeight = (effectiveDanmuHeight / currentTrackCount).coerceAtLeast(1)
         val topMargin = trackIndex * trackHeight + (trackHeight - viewHeight) / 2
 
         // 设置初始位置（屏幕右侧外）
@@ -199,7 +214,7 @@ class SimpleDanmuView @JvmOverloads constructor(
     }
 
     private fun ensureTracksReady(forceRebuild: Boolean = false) {
-        val newTrackCount = calculateTrackCount(height)
+        val newTrackCount = calculateTrackCount(effectiveDanmuHeight)
         if (forceRebuild || newTrackCount != currentTrackCount || tracks.size != newTrackCount) {
             rebuildTracks(newTrackCount)
         }

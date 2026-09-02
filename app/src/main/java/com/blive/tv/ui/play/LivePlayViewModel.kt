@@ -54,6 +54,7 @@ class LivePlayViewModel : ViewModel() {
         val danmuSpeed: Float = 1.0f,
         val danmuOpacity: Float = 1.0f,
         val danmuSize: Float = 1.0f,
+        val danmuArea: Float = 1.0f,
         val anchorMid: Long = 0L,
         val anchorName: String = "",
         val roomTitle: String = "",
@@ -115,6 +116,8 @@ class LivePlayViewModel : ViewModel() {
                 danmuEnabled = UserPreferencesManager.isDanmakuEnabled(appContext),
                 danmuSize = UserPreferencesManager.getDanmakuSizeScale(appContext),
                 danmuOpacity = UserPreferencesManager.getDanmakuAlpha(appContext),
+                danmuSpeed = UserPreferencesManager.getDanmakuSpeed(appContext),
+                danmuArea = UserPreferencesManager.getDanmakuArea(appContext),
                 anchorMid = anchorMid,
                 anchorName = anchorName,
                 roomTitle = roomTitle
@@ -349,6 +352,7 @@ class LivePlayViewModel : ViewModel() {
 
     fun setDanmuSpeed(speed: Float) {
         _uiState.update { it.copy(danmuSpeed = speed) }
+        UserPreferencesManager.setDanmakuSpeed(appContext, speed)
     }
 
     fun setDanmuOpacity(opacity: Float) {
@@ -359,6 +363,11 @@ class LivePlayViewModel : ViewModel() {
     fun setDanmuSize(size: Float) {
         _uiState.update { it.copy(danmuSize = size) }
         UserPreferencesManager.setDanmakuSizeScale(appContext, size)
+    }
+
+    fun setDanmuArea(area: Float) {
+        _uiState.update { it.copy(danmuArea = area) }
+        UserPreferencesManager.setDanmakuArea(appContext, area)
     }
 
     // ---------------- 弹幕连接 ----------------

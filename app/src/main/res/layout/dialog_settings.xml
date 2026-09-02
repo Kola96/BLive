@@ -209,6 +209,102 @@
             android:paddingStart="8dp" />
     </LinearLayout>
 
+    <!-- 弹幕速度 -->
+    <LinearLayout
+        android:id="@+id/container_danmaku_speed"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:focusable="true"
+        android:background="@drawable/option_selector_background"
+        android:layout_marginBottom="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/danmaku_speed_label"
+            android:textSize="18sp"
+            android:textColor="@android:color/white"
+            android:layout_weight="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="&lt;"
+            android:textSize="18sp"
+            android:textColor="#80FFFFFF"
+            android:paddingEnd="8dp" />
+
+        <TextView
+            android:id="@+id/tv_danmaku_speed_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="正常"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:minWidth="60dp"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="&gt;"
+            android:textSize="18sp"
+            android:textColor="#80FFFFFF"
+            android:paddingStart="8dp" />
+    </LinearLayout>
+
+    <!-- 弹幕显示区域 -->
+    <LinearLayout
+        android:id="@+id/container_danmaku_area"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:focusable="true"
+        android:background="@drawable/option_selector_background"
+        android:layout_marginBottom="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/danmaku_area_label"
+            android:textSize="18sp"
+            android:textColor="@android:color/white"
+            android:layout_weight="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="&lt;"
+            android:textSize="18sp"
+            android:textColor="#80FFFFFF"
+            android:paddingEnd="8dp" />
+
+        <TextView
+            android:id="@+id/tv_danmaku_area_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="全屏"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:minWidth="60dp"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="&gt;"
+            android:textSize="18sp"
+            android:textColor="#80FFFFFF"
+            android:paddingStart="8dp" />
+    </LinearLayout>
+
     <Button
         android:id="@+id/btn_close"
         android:layout_width="match_parent"

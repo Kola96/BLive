@@ -69,13 +69,17 @@ class LivePlayActivity : AppCompatActivity() {
         private const val CATEGORY_CDN = "cdn"
         private const val CATEGORY_CODEC = "codec"
         private const val CATEGORY_DANMU_ENABLE = "danmu_enable"
+        private const val CATEGORY_DANMU_SPEED = "danmu_speed"
         private const val CATEGORY_DANMU_OPACITY = "danmu_opacity"
         private const val CATEGORY_DANMU_SIZE = "danmu_size"
+        private const val CATEGORY_DANMU_AREA = "danmu_area"
         private const val BACK_PRESS_EXIT_WINDOW_MS = 3000L
         private const val LONG_PRESS_THRESHOLD_MS = 2000L
 
         private val DANMU_OPACITY_OPTIONS = listOf(0.25f, 0.5f, 0.75f, 1.0f)
         private val DANMU_SIZE_OPTIONS = listOf(0.5f, 0.75f, 1.0f, 1.5f, 2.0f)
+        private val DANMU_SPEED_OPTIONS = listOf(0.5f, 1.0f, 1.5f, 2.0f)
+        private val DANMU_AREA_OPTIONS = listOf(1.0f, 0.5f, 0.25f)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -212,13 +216,14 @@ class LivePlayActivity : AppCompatActivity() {
                 // 弹幕设置与弹幕 View
                 launch {
                     viewModel.uiState
-                        .map { DanmuSettings(it.danmuEnabled, it.danmuOpacity, it.danmuSize, it.danmuSpeed) }
+                        .map { DanmuSettings(it.danmuEnabled, it.danmuOpacity, it.danmuSize, it.danmuSpeed, it.danmuArea) }
                         .distinctUntilChanged()
                         .collect { settings ->
                             simpleDanmuView.isDanmuEnabled = settings.enabled
                             simpleDanmuView.danmuAlpha = settings.opacity
                             simpleDanmuView.danmuSizeScale = settings.size
                             simpleDanmuView.danmuSpeedScale = settings.speed
+                            simpleDanmuView.danmuAreaRatio = settings.area
                             updateDanmuCategories()
                         }
                 }
@@ -273,7 +278,8 @@ class LivePlayActivity : AppCompatActivity() {
         val enabled: Boolean,
         val opacity: Float,
         val size: Float,
-        val speed: Float
+        val speed: Float,
+        val area: Float
     )
 
     // ---------------- 弹幕渲染 ----------------
@@ -323,8 +329,10 @@ class LivePlayActivity : AppCompatActivity() {
             CATEGORY_CDN -> viewModel.selectCdn(option.id)
             CATEGORY_CODEC -> viewModel.selectCodec(option.id)
             CATEGORY_DANMU_ENABLE -> viewModel.setDanmuEnabled(option.id == "1")
+            CATEGORY_DANMU_SPEED -> viewModel.setDanmuSpeed(option.id.toFloat())
             CATEGORY_DANMU_OPACITY -> viewModel.setDanmuOpacity(option.id.toFloat())
             CATEGORY_DANMU_SIZE -> viewModel.setDanmuSize(option.id.toFloat())
+            CATEGORY_DANMU_AREA -> viewModel.setDanmuArea(option.id.toFloat())
         }
         refreshPanels(focusTargetId = option.id)
     }
@@ -395,6 +403,8 @@ class LivePlayActivity : AppCompatActivity() {
         // 吸附到最近的有效档位
         val snappedOpacity = DANMU_OPACITY_OPTIONS.minBy { kotlin.math.abs(it - state.danmuOpacity) }
         val snappedSize = DANMU_SIZE_OPTIONS.minBy { kotlin.math.abs(it - state.danmuSize) }
+        val snappedSpeed = DANMU_SPEED_OPTIONS.minBy { kotlin.math.abs(it - state.danmuSpeed) }
+        val snappedArea = DANMU_AREA_OPTIONS.minBy { kotlin.math.abs(it - state.danmuArea) }
 
         val categories = listOf(
             PlaySettingsCategory(
@@ -402,6 +412,12 @@ class LivePlayActivity : AppCompatActivity() {
                 name = "开关",
                 currentValue = if (state.danmuEnabled) "开启" else "关闭",
                 isExpanded = currentExpandedCategory == CATEGORY_DANMU_ENABLE
+            ),
+            PlaySettingsCategory(
+                id = CATEGORY_DANMU_SPEED,
+                name = "速度",
+                currentValue = danmuSpeedDisplayName(snappedSpeed),
+                isExpanded = currentExpandedCategory == CATEGORY_DANMU_SPEED
             ),
             PlaySettingsCategory(
                 id = CATEGORY_DANMU_OPACITY,
@@ -414,6 +430,12 @@ class LivePlayActivity : AppCompatActivity() {
                 name = "大小",
                 currentValue = "${(snappedSize * 100).toInt()}%",
                 isExpanded = currentExpandedCategory == CATEGORY_DANMU_SIZE
+            ),
+            PlaySettingsCategory(
+                id = CATEGORY_DANMU_AREA,
+                name = "显示区域",
+                currentValue = danmuAreaDisplayName(snappedArea),
+                isExpanded = currentExpandedCategory == CATEGORY_DANMU_AREA
             )
         )
 
@@ -426,16 +448,35 @@ class LivePlayActivity : AppCompatActivity() {
                         displayList.add(PlaySettingsOption("1", "开启", state.danmuEnabled, category.id))
                         displayList.add(PlaySettingsOption("0", "关闭", !state.danmuEnabled, category.id))
                     }
+                    CATEGORY_DANMU_SPEED -> displayList.addAll(DANMU_SPEED_OPTIONS.map {
+                        PlaySettingsOption(it.toString(), danmuSpeedDisplayName(it), it == snappedSpeed, category.id)
+                    })
                     CATEGORY_DANMU_OPACITY -> displayList.addAll(DANMU_OPACITY_OPTIONS.map {
                         PlaySettingsOption(it.toString(), "${(it * 100).toInt()}%", it == snappedOpacity, category.id)
                     })
                     CATEGORY_DANMU_SIZE -> displayList.addAll(DANMU_SIZE_OPTIONS.map {
                         PlaySettingsOption(it.toString(), "${(it * 100).toInt()}%", it == snappedSize, category.id)
                     })
+                    CATEGORY_DANMU_AREA -> displayList.addAll(DANMU_AREA_OPTIONS.map {
+                        PlaySettingsOption(it.toString(), danmuAreaDisplayName(it), it == snappedArea, category.id)
+                    })
                 }
             }
         }
         danmuSettingsAdapter.updateItems(displayList)
+    }
+
+    private fun danmuSpeedDisplayName(speed: Float): String = when (speed) {
+        0.5f -> "慢速"
+        1.5f -> "快速"
+        2.0f -> "极速"
+        else -> "正常"
+    }
+
+    private fun danmuAreaDisplayName(area: Float): String = when (area) {
+        0.5f -> "半屏"
+        0.25f -> "1/4屏"
+        else -> "全屏"
     }
 
     private fun restoreFocus(
