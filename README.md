@@ -61,7 +61,7 @@
 *   **架构**：MVVM
 *   **UI 框架**：[Android Leanback](https://developer.android.com/jetpack/androidx/releases/leanback) (TV UI)
 *   **网络请求**：[Retrofit](https://square.github.io/retrofit/) + [OkHttp](https://square.github.io/okhttp/)
-*   **视频播放**：[ExoPlayer](https://github.com/google/ExoPlayer) (Media3)
+*   **视频播放**：[ExoPlayer](https://github.com/google/ExoPlayer) (Media2)
 *   **图片加载**：[Glide](https://github.com/bumptech/glide)
 *   **弹幕引擎**：自定义 TCP/WebSocket 协议实现
 *   **二维码**：[ZXing](https://github.com/zxing/zxing)
