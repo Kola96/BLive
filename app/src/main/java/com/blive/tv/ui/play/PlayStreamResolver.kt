@@ -40,12 +40,22 @@ class PlayStreamResolver {
     private val preferredProtocolList = listOf("http_stream", "http_hls")
     private val preferredFormatList = listOf("flv", "ts", "fmp4")
 
+    /**
+     * 该编码+封装组合是否可被 ExoPlayer 播放。
+     * B站的 hevc+flv 是增强 RTMP 封装（FLV codec id 12），
+     * ExoPlayer 的 FlvExtractor 只支持 AVC，hevc 只能走 HLS（ts/fmp4）。
+     */
+    private fun isPlayable(codecName: String, formatName: String): Boolean {
+        return !(codecName == "hevc" && formatName == "flv")
+    }
+
     fun buildCapabilityGraph(data: RoomPlayInfoData): CapabilityGraph {
         val capabilities = mutableListOf<StreamCapability>()
         val qualityCandidates = mutableSetOf<Int>()
         for (stream in data.playurlInfo.playurl.stream) {
             for (format in stream.format) {
                 for (codec in format.codec) {
+                    if (!isPlayable(codec.codecName, format.formatName)) continue
                     qualityCandidates.add(codec.currentQn)
                     qualityCandidates.addAll(codec.acceptQn)
                     for (urlInfo in codec.urlInfo) {
@@ -172,7 +182,9 @@ class PlayStreamResolver {
                 for (format in stream.format) {
                     if (format.formatName == targetFormat) {
                         for (codec in format.codec) {
-                            if (codec.codecName == targetCodec && codec.acceptQn.contains(targetQn)) {
+                            if (codec.codecName == targetCodec && codec.acceptQn.contains(targetQn)
+                                && isPlayable(codec.codecName, format.formatName)
+                            ) {
                                 for (urlInfo in codec.urlInfo) {
                                     val cdnName = urlInfo.host.substringAfter("://").substringBefore(".")
                                     if (targetCdn.isEmpty() || cdnName == targetCdn) {
@@ -201,7 +213,9 @@ class PlayStreamResolver {
                 for (format in stream.format) {
                     if (format.formatName == targetFormat) {
                         for (codec in format.codec) {
-                            if (codec.codecName == targetCodec && codec.acceptQn.contains(targetQn)) {
+                            if (codec.codecName == targetCodec && codec.acceptQn.contains(targetQn)
+                                && isPlayable(codec.codecName, format.formatName)
+                            ) {
                                 for (urlInfo in codec.urlInfo) {
                                     urls.add("${urlInfo.host.trim()}${codec.baseUrl}${urlInfo.extra}")
                                 }

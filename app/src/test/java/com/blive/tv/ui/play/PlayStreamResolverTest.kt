@@ -10,6 +10,7 @@ import com.blive.tv.data.model.Stream
 import com.blive.tv.data.model.UrlInfo
 import com.blive.tv.data.model.VideoCodecs
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -60,33 +61,62 @@ class PlayStreamResolverTest {
         playurlInfo = PlayUrlInfo(confJson = "{}", playurl = PlayUrl(cid = 123, gQnDesc = emptyList(), stream = streams))
     )
 
-    /** 标准数据：flv+ts 两种封装，avc+hevc 两种编码，原画/蓝光/流畅三档清晰度 */
+    /**
+     * 贴近真实响应的数据：
+     * - http_stream/flv：avc + hevc（hevc+flv 为增强RTMP封装，ExoPlayer 不支持）
+     * - http_hls/ts + http_hls/fmp4：avc + hevc
+     */
     private fun standardData(): RoomPlayInfoData {
-        val flvFormat = Format(
-            formatName = "flv",
-            codec = listOf(
-                codec("avc", 10000, listOf(10000, 400, 80), "/avc_10000.flv"),
-                codec("hevc", 10000, listOf(10000, 400), "/hevc_10000.flv"),
-                codec("avc", 80, listOf(80), "/avc_80.flv")
+        val httpStream = Stream(
+            protocolName = "http_stream",
+            format = listOf(
+                Format(
+                    formatName = "flv",
+                    codec = listOf(
+                        codec("avc", 10000, listOf(10000, 400, 80), "/avc_10000.flv"),
+                        codec("hevc", 10000, listOf(10000, 400), "/hevc_10000.flv"),
+                        codec("avc", 80, listOf(80), "/avc_80.flv")
+                    )
+                )
             )
         )
-        val tsFormat = Format(
-            formatName = "ts",
-            codec = listOf(
-                codec("avc", 10000, listOf(10000, 400), "/avc_10000.ts"),
-                codec("avc", 80, listOf(80), "/avc_80.ts")
+        val httpHls = Stream(
+            protocolName = "http_hls",
+            format = listOf(
+                Format(
+                    formatName = "ts",
+                    codec = listOf(
+                        codec("avc", 10000, listOf(10000, 400), "/avc_10000.m3u8"),
+                        codec("hevc", 10000, listOf(10000, 400), "/hevc_10000.m3u8")
+                    )
+                ),
+                Format(
+                    formatName = "fmp4",
+                    codec = listOf(
+                        codec("avc", 10000, listOf(10000), "/avc_fmp4/index.m3u8"),
+                        codec("hevc", 10000, listOf(10000), "/hevc_fmp4/index.m3u8")
+                    )
+                )
             )
         )
-        return data(listOf(Stream(protocolName = "http_stream", format = listOf(flvFormat, tsFormat))))
+        return data(listOf(httpStream, httpHls))
     }
 
     // ---------------- buildCapabilityGraph ----------------
 
     @Test
-    fun `capability graph collects all capabilities and quality candidates`() {
+    fun `capability graph collects playable capabilities and quality candidates`() {
         val graph = resolver.buildCapabilityGraph(standardData())
-        assertEquals(5, graph.capabilities.size)
+        // flv: avc10000 + avc80（hevc+flv 被过滤）, ts: avc + hevc, fmp4: avc + hevc
+        assertEquals(6, graph.capabilities.size)
         assertEquals(setOf(10000, 400, 80), graph.qualityCandidates)
+    }
+
+    @Test
+    fun `hevc flv capabilities are excluded as unplayable`() {
+        val graph = resolver.buildCapabilityGraph(standardData())
+        assertTrue(graph.capabilities.none { it.codecName == "hevc" && it.formatName == "flv" })
+        assertTrue(graph.capabilities.any { it.codecName == "hevc" && it.formatName == "ts" })
     }
 
     @Test
@@ -100,12 +130,13 @@ class PlayStreamResolverTest {
     // ---------------- resolveSelection ----------------
 
     @Test
-    fun `resolve exact qn with preferred codec`() {
+    fun `resolve hevc preference picks hls stream instead of flv`() {
         val graph = resolver.buildCapabilityGraph(standardData())
         val resolved = resolver.resolveSelection(graph, SelectionRequest(targetQn = 10000, preferredCodec = "hevc", currentCdnHost = ""))
-        assertEquals(10000, resolved?.resolvedQn)
         assertEquals("hevc", resolved?.resolvedCodec)
-        assertTrue(resolved?.url.orEmpty().contains("hevc_10000.flv"))
+        // ExoPlayer 不支持 hevc+flv，必须落到 HLS
+        assertTrue(resolved?.url.orEmpty().contains("hevc_10000.m3u8"))
+        assertFalse(resolved?.url.orEmpty().contains(".flv"))
     }
 
     @Test
@@ -114,13 +145,6 @@ class PlayStreamResolverTest {
         val resolved = resolver.resolveSelection(graph, SelectionRequest(targetQn = 10000, preferredCodec = "", currentCdnHost = ""))
         assertEquals("avc", resolved?.resolvedCodec)
         assertTrue(resolved?.url.orEmpty().endsWith("/avc_10000.flv?token=abc"))
-    }
-
-    @Test
-    fun `flv format preferred over ts`() {
-        val graph = resolver.buildCapabilityGraph(standardData())
-        val resolved = resolver.resolveSelection(graph, SelectionRequest(targetQn = 80, preferredCodec = "avc", currentCdnHost = ""))
-        assertTrue(resolved?.url.orEmpty().contains(".flv"))
     }
 
     @Test
@@ -161,18 +185,15 @@ class PlayStreamResolverTest {
     // ---------------- buildAllUrls / findStreamUrl ----------------
 
     @Test
-    fun `buildAllUrls puts avc before hevc within same format, and flv before ts`() {
+    fun `buildAllUrls puts flv before hls and contains no hevc flv`() {
         val urls = resolver.buildAllUrls(standardData())
         assertTrue(urls.isNotEmpty())
-        // 同一封装格式内，avc 排在 hevc 前
-        val flvUrls = urls.filter { it.contains(".flv") }
-        val firstHevcFlv = flvUrls.indexOfFirst { it.contains("hevc") }
-        val lastAvcFlv = flvUrls.indexOfLast { it.contains("avc") }
-        assertTrue("flv 内 avc 应排在 hevc 前", lastAvcFlv != -1 && firstHevcFlv != -1 && lastAvcFlv < firstHevcFlv)
-        // flv 封装排在 ts 封装前
+        // hevc+flv 不可播放，不应出现在 fallback 列表
+        assertTrue(urls.none { it.contains("hevc") && it.contains(".flv") })
+        // flv 排在 hls 前
         val lastFlv = urls.indexOfLast { it.contains(".flv") }
-        val firstTs = urls.indexOfFirst { it.contains(".ts") }
-        assertTrue("flv 应排在 ts 前", lastFlv != -1 && firstTs != -1 && lastFlv < firstTs)
+        val firstM3u8 = urls.indexOfFirst { it.contains(".m3u8") }
+        assertTrue("flv 应排在 hls 前", lastFlv != -1 && firstM3u8 != -1 && lastFlv < firstM3u8)
     }
 
     @Test
@@ -186,6 +207,9 @@ class PlayStreamResolverTest {
         // 不在 acceptQn 中的清晰度返回空
         val noQn = resolver.findStreamUrl(data, "http_stream", "flv", "avc", 250, "")
         assertTrue(noQn.isEmpty())
+        // hevc+flv 不可播放，即使精确匹配也返回空
+        val hevcFlv = resolver.findStreamUrl(data, "http_stream", "flv", "hevc", 10000, "")
+        assertTrue(hevcFlv.isEmpty())
     }
 
     @Test
