@@ -103,9 +103,9 @@ class PendingContentFocusTest {
 
     private fun sampleRooms(): List<LiveRoom> {
         return listOf(
-            LiveRoom(1001L, "", "", "", "", ""),
-            LiveRoom(1002L, "", "", "", "", ""),
-            LiveRoom(1003L, "", "", "", "", "")
+            LiveRoom(roomId = 1001L, coverUrl = "", anchorName = "", anchorAvatar = "", roomTitle = "", areaName = ""),
+            LiveRoom(roomId = 1002L, coverUrl = "", anchorName = "", anchorAvatar = "", roomTitle = "", areaName = ""),
+            LiveRoom(roomId = 1003L, coverUrl = "", anchorName = "", anchorAvatar = "", roomTitle = "", areaName = "")
         )
     }
 }
