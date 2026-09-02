@@ -8,7 +8,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.util.AttributeSet
-import android.util.Log
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
@@ -16,9 +15,6 @@ import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatTextView
-import java.util.LinkedList
-import java.util.Queue
-import kotlin.random.Random
 
 /**
  * 简易弹幕组件
@@ -32,7 +28,9 @@ class SimpleDanmuView @JvmOverloads constructor(
 
     private var currentTrackCount = DEFAULT_TRACK_COUNT
     private var tracks = LongArray(DEFAULT_TRACK_COUNT) { 0L }
-    private val danmuQueue: Queue<DanmuItem> = LinkedList()
+
+    /** 弹幕 View 回收池：弹幕是高频创建/销毁对象，回收复用避免 GC 抖动 */
+    private val textViewPool = ArrayDeque<StrokedTextView>()
     
     // 配置参数
     var isDanmuEnabled = true
@@ -40,7 +38,7 @@ class SimpleDanmuView @JvmOverloads constructor(
             field = value
             visibility = if (value) View.VISIBLE else View.INVISIBLE
             if (!value) {
-                removeAllViews() // 关闭时清空当前弹幕
+                clearAllDanmuViews() // 关闭时清空当前弹幕
             }
         }
     
@@ -65,12 +63,12 @@ class SimpleDanmuView @JvmOverloads constructor(
     var danmuSpeedScale = 1.0f // 速度缩放比例 (数值越大越快)
 
     companion object {
-        private const val TAG = "SimpleDanmuView"
         private const val DEFAULT_TRACK_COUNT = 10
         private const val MIN_TRACK_COUNT = 4
         private const val MAX_TRACK_COUNT = 30
         private const val BASE_TEXT_SP = 20f
         private const val TRACK_HEIGHT_RATIO = 1.6f
+        private const val MAX_POOL_SIZE = 20
     }
 
     init {
@@ -103,24 +101,16 @@ class SimpleDanmuView @JvmOverloads constructor(
             return
         }
 
-        // 创建弹幕 View
-        val textView = StrokedTextView(context).apply {
+        // 从回收池复用或创建弹幕 View
+        val textView = obtainTextView().apply {
             text = item.text
             // 解析颜色，通过Alpha通道控制透明度
             val alpha = (danmuAlpha * 255).toInt().coerceIn(0, 255)
             val rgb = item.color.toLong() and 0x00FFFFFFL
             val textColor = (alpha.toLong() shl 24 or rgb).toInt()
-            Log.d(TAG, "textColor: $textColor")
             setTextColor(textColor)
 
             setTextSize(TypedValue.COMPLEX_UNIT_SP, BASE_TEXT_SP * danmuSizeScale) // 基础字号 20sp
-            // alpha = danmuAlpha // 不再使用 View.alpha 控制透明度
-            maxLines = 1
-            includeFontPadding = false
-            layoutParams = LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
         }
 
         // 测量 View 大小
@@ -154,14 +144,51 @@ class SimpleDanmuView @JvmOverloads constructor(
         
         animator.addListener(object : AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: Animator) {
-                removeView(textView) // 动画结束移除 View
+                recycleTextView(textView)
+            }
+
+            override fun onAnimationCancel(animation: Animator) {
+                recycleTextView(textView)
             }
         })
-        
+
         // 保存动画引用以便后续变速
         textView.tag = animator
 
         animator.start()
+    }
+
+    private fun obtainTextView(): StrokedTextView {
+        val pooled = textViewPool.removeFirstOrNull()
+        if (pooled != null) return pooled
+        return StrokedTextView(context).apply {
+            maxLines = 1
+            includeFontPadding = false
+            layoutParams = LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+    }
+
+    private fun recycleTextView(textView: StrokedTextView) {
+        // cancel() 会连续触发 onAnimationCancel/onAnimationEnd，用 tag 防重复回收
+        val animator = textView.tag as? ObjectAnimator ?: return
+        animator.removeAllListeners()
+        textView.tag = null
+        removeView(textView)
+        if (textViewPool.size < MAX_POOL_SIZE) {
+            textViewPool.addLast(textView)
+        }
+    }
+
+    /** 清空屏幕上的弹幕（动画中的先取消，统一回收到池） */
+    private fun clearAllDanmuViews() {
+        for (i in childCount - 1 downTo 0) {
+            val view = getChildAt(i) as? StrokedTextView ?: continue
+            (view.tag as? ObjectAnimator)?.cancel()
+        }
+        removeAllViews()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -202,49 +229,6 @@ class SimpleDanmuView @JvmOverloads constructor(
         currentTrackCount = normalizedTrackCount
     }
 
-    private fun updateRunningDanmuSpeed() {
-        for (i in 0 until childCount) {
-            val view = getChildAt(i)
-            val oldAnimator = view.tag as? ObjectAnimator ?: continue
-            
-            if (oldAnimator.isRunning) {
-                val currentX = view.translationX
-                val viewWidth = view.width
-                val endX = -viewWidth.toFloat()
-                
-                // 取消旧动画
-                oldAnimator.removeAllListeners()
-                oldAnimator.cancel()
-                
-                // 计算剩余距离和新时长
-                val totalDistance = width + viewWidth
-                val remainingDistance = currentX - endX
-                val newTotalDuration = (8000 / danmuSpeedScale).toLong()
-                
-                val newDuration = if (totalDistance > 0) {
-                    (newTotalDuration * (remainingDistance / totalDistance.toFloat())).toLong()
-                } else {
-                    0L
-                }
-                
-                if (newDuration > 0) {
-                    val newAnimator = ObjectAnimator.ofFloat(view, "translationX", currentX, endX)
-                    newAnimator.duration = newDuration
-                    newAnimator.interpolator = LinearInterpolator()
-                    newAnimator.addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) {
-                            removeView(view)
-                        }
-                    })
-                    newAnimator.start()
-                    view.tag = newAnimator
-                } else {
-                    removeView(view)
-                }
-            }
-        }
-    }
-
     private fun findAvailableTrack(): Int {
         val now = System.currentTimeMillis()
         for (i in tracks.indices) {
@@ -259,7 +243,7 @@ class SimpleDanmuView @JvmOverloads constructor(
      * 清空所有弹幕
      */
     fun clear() {
-        removeAllViews()
+        clearAllDanmuViews()
         for (i in tracks.indices) {
             tracks[i] = 0L
         }
