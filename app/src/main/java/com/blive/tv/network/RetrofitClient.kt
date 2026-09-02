@@ -15,11 +15,19 @@ object RetrofitClient {
     private const val API_BASE_URL = "https://api.bilibili.com/"
     private const val LIVE_API_BASE_URL = "https://api.live.bilibili.com/"
     private const val LIVE_WEB_BASE_URL = "https://live.bilibili.com/"
-    private const val WEB_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0"
+
+    /** 网页端 UA，播放器与需要浏览器特征的 API 共用 */
+    const val WEB_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0"
 
     private val okHttpClient: OkHttpClient by lazy {
         val logging = HttpLoggingInterceptor()
-        logging.setLevel(HttpLoggingInterceptor.Level.BODY)
+        logging.setLevel(
+            if (com.blive.tv.BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BODY
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
+        )
 
         OkHttpClient.Builder()
             .cookieJar(PersistentCookieJar())
@@ -53,7 +61,6 @@ object RetrofitClient {
     
     private val gson by lazy {
         GsonBuilder()
-            .setLenient()
             .create()
     }
 
@@ -109,6 +116,7 @@ object RetrofitClient {
         val path = request.url.encodedPath
         if (host == "live.bilibili.com" && path == "/all") return true
         if (host == "api.bilibili.com" && path == "/x/web-interface/wbi/search/type") return true
+        if (host == "api.live.bilibili.com" && path == "/xlive/web-room/v1/index/getDanmuInfo") return true
         return host == "api.live.bilibili.com" && (path == "/xlive/web-interface/v1/second/getUserRecommend" || path == "/xlive/web-interface/v1/second/getList")
     }
 
