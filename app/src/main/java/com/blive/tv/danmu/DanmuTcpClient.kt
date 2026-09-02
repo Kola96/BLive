@@ -4,6 +4,8 @@ import android.util.Log
 import com.blive.tv.network.RetrofitClient
 import com.blive.tv.network.WbiKeyParser
 import com.blive.tv.network.WbiSigner
+import com.blive.tv.utils.AppRuntime
+import com.blive.tv.utils.TokenManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -250,8 +252,11 @@ class DanmuTcpClient(
     }
 
     private fun buildAuthJson(): String {
+        // 登录用户必须携带真实 uid：getDanmuInfo 返回的 token 绑定用户身份，
+        // uid=0 会被服务器拒绝并直接断开连接（匿名场景 token 不绑身份，uid=0 可用）
+        val uid = TokenManager.getUserId(AppRuntime.appContext)
         // 字段按字母序排列，与官方协议示例保持一致
-        return "{\"buvid\":\"$buvid\",\"key\":\"$token\",\"platform\":\"danmuji\",\"protover\":3,\"roomid\":$roomId,\"type\":2,\"uid\":0}"
+        return "{\"buvid\":\"$buvid\",\"key\":\"$token\",\"platform\":\"danmuji\",\"protover\":3,\"roomid\":$roomId,\"type\":2,\"uid\":$uid}"
     }
 
     private fun sendAuthPacket() {
