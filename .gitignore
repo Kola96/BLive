@@ -15,3 +15,9 @@ app/build/
 app/*.jks
 
 .claude/
+
+# Python E2E 测试
+__pycache__/
+.pytest_cache/
+.venv/
+tests/e2e/.venv/
