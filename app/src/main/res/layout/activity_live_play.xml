@@ -34,7 +34,10 @@
         android:textSize="18sp"
         android:visibility="gone" />
 
-    <!-- 底部抽屉设置面板：分类行 + 选项行，不遮挡大部分画面 -->
+    <!-- 底部抽屉设置面板：分类行 + 选项行，不遮挡大部分画面。
+         面板四边统一 24dp padding；RV 不加 padding、保持默认 clipToPadding=true，
+         使端部 pill 的停留位置与滚动中截断 pill 的裁切线都在同一 padding 边界上，
+         左右上下四边等距 -->
     <LinearLayout
         android:id="@+id/settings_panel"
         android:layout_width="match_parent"
@@ -42,44 +45,30 @@
         android:layout_gravity="bottom"
         android:orientation="vertical"
         android:background="@drawable/panel_bottom_background"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp"
-        android:paddingTop="20dp"
-        android:paddingBottom="20dp"
-        android:visibility="gone"
-        android:clipToPadding="false"
-        android:clipChildren="false">
+        android:padding="24dp"
+        android:visibility="gone">
 
-        <!-- 分类行（横向）。内边距让滚到两端时端部 pill 与面板边缘保持间距；
-             clipToPadding=false 使滚动中的 pill 滑过留白区而不是被生硬切断 -->
+        <!-- 分类行（横向） -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/settings_category_recycler"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingStart="24dp"
-            android:paddingEnd="24dp"
-            android:clipToPadding="false"
-            android:clipChildren="false" />
+            android:orientation="horizontal" />
 
         <!-- 分隔线 -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="#33FFFFFF"
-            android:layout_marginTop="12dp"
-            android:layout_marginBottom="12dp" />
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="16dp" />
 
         <!-- 选项行（横向，跟随分类行焦点切换） -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/settings_option_recycler"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingStart="24dp"
-            android:paddingEnd="24dp"
-            android:clipToPadding="false"
-            android:clipChildren="false" />
+            android:orientation="horizontal" />
 
     </LinearLayout>
 
