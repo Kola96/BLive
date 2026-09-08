@@ -58,12 +58,24 @@ class PlayPage:
     # ---------- 设置面板 ----------
 
     def open_settings(self):
-        self.dev.key("MENU")
-        time.sleep(1.5)  # 面板打开动画 + 焦点恢复
+        """打开设置面板：发送 MENU 并验证"画质"出现，失败重试（按键可能被吞）。"""
+        for _ in range(4):
+            if self.dev.d(text="画质").wait(timeout=1.5):
+                time.sleep(0.8)  # 等焦点恢复稳定
+                return
+            self.dev.key("MENU")
+        raise AssertionError("设置面板打开失败")
 
     def close_settings(self):
+        """关闭设置面板并验证（未展开分类时一次 BACK 关闭，展开时先收起）。"""
+        for _ in range(3):
+            if not self.dev.d(text="画质").exists:
+                return
+            self.dev.key("BACK")
+            time.sleep(0.8)
+        # 兜底：再按一次
         self.dev.key("BACK")
-        time.sleep(1)
+        time.sleep(0.5)
 
     def category_value(self, name: str) -> str | None:
         """读取设置分类当前值：如 编码 -> 'H.264 (AVC)'。"""
@@ -118,14 +130,31 @@ class PlayPage:
         return cat, expanded
 
     def _option_bounds_under(self, category: str, option: str) -> tuple | None:
-        """展开的分类下方、下一个分类行（带 ▶/▼ 标记）之前的选项区域。"""
+        """展开分类的选项区域：与分类**同列**（面板分左右两列，标记会互相干扰），
+        且位于分类行与下一个同列分类行之间。"""
         cat, expanded = self._category_state(category)
         if cat is None or not expanded:
             return None
         expanded_markers, collapsed_markers = self._marker_nodes()
-        next_rows = [m for m in expanded_markers + collapsed_markers if m[1] >= cat[3]]
+        all_markers = expanded_markers + collapsed_markers
+        # 本行的箭头标记 → 确定所在列的 x 范围
+        row_markers = [m for m in all_markers if m[1] < cat[3] and m[3] > cat[1]]
+        if not row_markers:
+            return None
+        col_left = cat[0] - 8
+        col_right = row_markers[0][2] + 8
+
+        def in_column(bounds) -> bool:
+            center_x = (bounds[0] + bounds[2]) // 2
+            return col_left <= center_x <= col_right
+
+        # 同列中位于本行下方的下一个分类标记，作为选项区的下界
+        next_rows = [m for m in all_markers if in_column(m) and m[1] >= cat[3]]
         upper = min((m[1] for m in next_rows), default=1 << 30)
-        candidates = [b for b in self._text_nodes(option) if cat[3] <= b[1] < upper]
+        candidates = [
+            b for b in self._text_nodes(option)
+            if cat[3] <= b[1] < upper and in_column(b)
+        ]
         return candidates[0] if candidates else None
 
     def ensure_expanded(self, category: str, timeout: float = 8.0):
