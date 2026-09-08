@@ -50,15 +50,17 @@
         android:clipToPadding="false"
         android:clipChildren="false">
 
-        <!-- 分类行（横向） -->
+        <!-- 分类行（横向）。内边距让滚到两端时端部 pill 与面板边缘保持间距；
+             clipToPadding=false 使滚动中的 pill 滑过留白区而不是被生硬切断 -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/settings_category_recycler"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
             android:clipToPadding="false"
-            android:clipChildren="false"
-            android:padding="4dp" />
+            android:clipChildren="false" />
 
         <!-- 分隔线 -->
         <View
@@ -74,9 +76,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
             android:clipToPadding="false"
-            android:clipChildren="false"
-            android:padding="4dp" />
+            android:clipChildren="false" />
 
     </LinearLayout>
 
