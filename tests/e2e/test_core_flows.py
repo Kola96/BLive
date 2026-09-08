@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from core.pages import DANMU_SETTINGS_CATEGORIES, SETTINGS_CATEGORIES
+from core.pages import CATEGORY_RV_ID, DANMU_SETTINGS_CATEGORIES, SETTINGS_CATEGORIES
 
 
 class TestHomePage:
@@ -35,11 +35,26 @@ class TestPlayback:
 
 class TestPlaySettings:
     def test_settings_panel_complete(self, in_play_page):
-        """设置面板包含全部播放与弹幕设置项（含新增的速度/显示区域）。"""
+        """设置面板包含全部播放与弹幕设置项（含横向滚动查找离屏 chip）。"""
         in_play_page.open_settings()
         for label in SETTINGS_CATEGORIES + DANMU_SETTINGS_CATEGORIES:
-            assert in_play_page.dev.d(text=label).exists, f"设置项缺失: {label}"
+            assert in_play_page.chip_exists(label), f"设置项缺失: {label}"
         in_play_page.close_settings()
+
+    def test_danmu_toggle_in_settings(self, in_play_page):
+        """弹幕分类：按确认直接切换开关，值即时翻转；用例结束恢复原值。"""
+        page = in_play_page
+        page.open_settings()
+        try:
+            before = page.category_value("弹幕")
+            assert before in ("开启", "关闭")
+            target = "关闭" if before == "开启" else "开启"
+            page.select_category_option("弹幕", target)
+            assert page.category_value("弹幕") == target
+        finally:
+            # 恢复现场：设置是持久化的，不能污染后续用例和用户配置
+            page.select_category_option("弹幕", before)
+            page.close_settings()
 
     def test_danmu_area_setting(self, in_play_page):
         """弹幕显示区域可切换，值即时更新；用例结束恢复全屏。"""
@@ -67,8 +82,11 @@ class TestPlaySettings:
             dev.key("DPAD_CENTER")
             page.wait_playing()
             page.open_settings()
-            page.ensure_expanded("编码")
-            if page._option_bounds_under("编码", "H.265 (HEVC)") is not None:
+            #直通车聚焦"编码"chip，选项行联动显示该房间可用编码
+            page.focus_chip("编码")
+            time.sleep(0.8)
+            time.sleep(1.5)
+            if page._option_pill_bounds("H.265 (HEVC)") is not None:
                 found_hevc = True
                 break
             page.exit_to_home()

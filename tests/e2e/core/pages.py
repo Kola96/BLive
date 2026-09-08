@@ -4,16 +4,23 @@
 - 面板/列表项优先用「文本点击」（u2 click = 坐标触摸，会触发 item 的 click 监听），
   比 D-pad 逐步移动稳定得多。
 - 仅网格卡片进入直播间等少数场景用 D-pad。
+
+设置面板（底部抽屉版）结构：
+- 上排：分类 chip 行（settings_category_recycler，横向），chip = 名称 + 当前值
+- 下排：选项 pill 行（settings_option_recycler，横向），跟随分类焦点联动刷新
 """
 import time
+import xml.etree.ElementTree as ET
 
 from .device import Device, PACKAGE
 
 GRID_ID = f"{PACKAGE}:id/main_grid"
+CATEGORY_RV_ID = f"{PACKAGE}:id/settings_category_recycler"
+OPTION_RV_ID = f"{PACKAGE}:id/settings_option_recycler"
 
-# 播放设置面板全部设置项（用于完整性断言）
+# 播放设置面板全部分类（用于完整性断言）
 SETTINGS_CATEGORIES = ["画质", "线路", "编码"]
-DANMU_SETTINGS_CATEGORIES = ["开关", "速度", "不透明度", "大小", "显示区域"]
+DANMU_SETTINGS_CATEGORIES = ["弹幕", "速度", "不透明度", "大小", "显示区域"]
 
 
 class MainPage:
@@ -55,45 +62,28 @@ class PlayPage:
     def danmu_disconnected(self) -> bool:
         return bool(self.dev.logcat("EOFException"))
 
-    # ---------- 设置面板 ----------
+    # ---------- 设置面板（底部抽屉） ----------
 
     def open_settings(self):
         """打开设置面板：发送 MENU 并验证"画质"出现，失败重试（按键可能被吞）。"""
         for _ in range(4):
             if self.dev.d(text="画质").wait(timeout=1.5):
-                time.sleep(0.8)  # 等焦点恢复稳定
+                time.sleep(0.8)  # 等动画与焦点稳定
                 return
             self.dev.key("MENU")
         raise AssertionError("设置面板打开失败")
 
     def close_settings(self):
-        """关闭设置面板并验证（未展开分类时一次 BACK 关闭，展开时先收起）。"""
+        """关闭设置面板并验证。"""
         for _ in range(3):
             if not self.dev.d(text="画质").exists:
                 return
             self.dev.key("BACK")
             time.sleep(0.8)
-        # 兜底：再按一次
         self.dev.key("BACK")
         time.sleep(0.5)
 
-    def category_value(self, name: str) -> str | None:
-        """读取设置分类当前值：如 编码 -> 'H.264 (AVC)'。"""
-        import xml.etree.ElementTree as ET
-        root = ET.fromstring(self.dev.d.dump_hierarchy())
-        for parent in root.iter("node"):
-            texts = [c.get("text") for c in parent if c.get("text")]
-            if name in texts:
-                # 过滤分类名与左右箭头，剩下的就是当前值
-                values = [t for t in texts if t != name and t not in ("<", ">")]
-                return values[0] if values else None
-        return None
-
-    # ---------- 文本点击的可靠性处理 ----------
-    # TV 焦点模型下首击=聚焦、二击=激活，且展开/收起是 toggle；
-    # 因此不假设点击次数，用"点击-校验-重试"自闭环。
-    # 另注意重名文本（如两个分类的值都可能是 "100%"），
-    # 选项必须限定在目标分类行的下方区域。
+    # ---------- 层级解析工具 ----------
 
     @staticmethod
     def _parse_bounds(bounds: str) -> tuple[int, int, int, int]:
@@ -101,114 +91,195 @@ class PlayPage:
         nums = bounds.replace("][", ",").strip("[]").split(",")
         return tuple(int(n) for n in nums)
 
-    def _text_nodes(self, text: str):
-        import xml.etree.ElementTree as ET
+    def _nodes_in_container(self, container_id: str, text: str):
+        """查找位于指定容器（resource-id）内、文本匹配的节点 bounds 列表。"""
         root = ET.fromstring(self.dev.d.dump_hierarchy())
-        return [
-            self._parse_bounds(n.get("bounds"))
-            for n in root.iter("node")
-            if n.get("text") == text and n.get("bounds")
-        ]
+        parent_map = {c: p for p in root.iter() for c in p}
+        result = []
+        for node in root.iter("node"):
+            if node.get("text") != text or not node.get("bounds"):
+                continue
+            current = parent_map.get(node)
+            while current is not None:
+                if current.get("resource-id") == container_id:
+                    result.append(self._parse_bounds(node.get("bounds")))
+                    break
+                current = parent_map.get(current)
+        return result
 
     def _click_bounds(self, bounds):
         left, top, right, bottom = bounds
         self.dev.d.click((left + right) // 2, (top + bottom) // 2)
 
-    def _marker_nodes(self):
-        """分类行的展开/收起标记：▼=展开，▶=收起（仅分类行有此文本节点）。"""
-        return self._text_nodes("▼"), self._text_nodes("▶")
+    # ---------- 设置面板操作 ----------
 
-    def _category_state(self, category: str):
-        """返回 (分类行 bounds, 是否已展开)。"""
-        cat_nodes = self._text_nodes(category)
-        if not cat_nodes:
-            return None, False
-        cat = cat_nodes[0]
-        expanded_markers, _ = self._marker_nodes()
-        # ▼ 标记与分类名在同一行（y 区间重叠）
-        expanded = any(m[1] < cat[3] and m[3] > cat[1] for m in expanded_markers)
-        return cat, expanded
-
-    def _option_bounds_under(self, category: str, option: str) -> tuple | None:
-        """展开分类的选项区域：与分类**同列**（面板分左右两列，标记会互相干扰），
-        且位于分类行与下一个同列分类行之间。"""
-        cat, expanded = self._category_state(category)
-        if cat is None or not expanded:
-            return None
-        expanded_markers, collapsed_markers = self._marker_nodes()
-        all_markers = expanded_markers + collapsed_markers
-        # 本行的箭头标记 → 确定所在列的 x 范围
-        row_markers = [m for m in all_markers if m[1] < cat[3] and m[3] > cat[1]]
-        if not row_markers:
-            return None
-        col_left = cat[0] - 8
-        col_right = row_markers[0][2] + 8
-
-        def in_column(bounds) -> bool:
-            center_x = (bounds[0] + bounds[2]) // 2
-            return col_left <= center_x <= col_right
-
-        # 同列中位于本行下方的下一个分类标记，作为选项区的下界
-        next_rows = [m for m in all_markers if in_column(m) and m[1] >= cat[3]]
-        upper = min((m[1] for m in next_rows), default=1 << 30)
-        candidates = [
-            b for b in self._text_nodes(option)
-            if cat[3] <= b[1] < upper and in_column(b)
-        ]
-        return candidates[0] if candidates else None
-
-    def ensure_expanded(self, category: str, timeout: float = 8.0):
-        """确保分类处于展开状态（点击-校验-重试，自闭环处理"首击仅聚焦"与 toggle）。"""
-        deadline = time.time() + timeout
-        while True:
-            cat, expanded = self._category_state(category)
-            assert cat is not None, f"找不到设置分类: {category}"
-            if expanded:
-                return
-            assert time.time() < deadline, f"展开分类失败: {category}"
-            self._click_bounds(cat)
-            time.sleep(1.2)
-
-    def _scrollable_ancestor_id(self, text: str) -> str | None:
-        """找到文本节点所在的可滚动容器（RecyclerView）resource-id。"""
-        import xml.etree.ElementTree as ET
+    def category_value(self, name: str) -> str | None:
+        """读取分类 chip 的当前值：如 编码 -> 'H.264 (AVC)'。"""
         root = ET.fromstring(self.dev.d.dump_hierarchy())
         parent_map = {c: p for p in root.iter() for c in p}
         for node in root.iter("node"):
-            if node.get("text") == text:
-                current = parent_map.get(node)
-                while current is not None:
-                    if current.get("scrollable") == "true":
-                        return current.get("resource-id")
-                    current = parent_map.get(current)
-                return None
+            if node.get("text") != name:
+                continue
+            # 限定在分类行容器内，排除选项行里的重名文本
+            current = parent_map.get(node)
+            in_category_rv = False
+            while current is not None:
+                if current.get("resource-id") == CATEGORY_RV_ID:
+                    in_category_rv = True
+                    break
+                current = parent_map.get(current)
+            if not in_category_rv:
+                continue
+            # chip 容器内除名称外的文本即当前值
+            chip = parent_map.get(node)
+            if chip is None:
+                continue
+            texts = [c.get("text") for c in chip.iter("node") if c.get("text") and c.get("text") != name]
+            return texts[0] if texts else None
         return None
 
-    def _scroll_until_option(self, category: str, option: str) -> tuple | None:
-        """选项可能因列表过长被滚出屏幕（离屏项不在层级中），
-        在分类所在的可滚动容器内向下滚动直至选项出现。"""
-        rv_id = self._scrollable_ancestor_id(category)
+    def _option_pill_bounds(self, option: str):
+        """选项 pill 必须位于选项行容器内（与分类 chip 的值文本隔离）。"""
+        nodes = self._nodes_in_container(OPTION_RV_ID, option)
+        return nodes[0] if nodes else None
+
+    def _scroll_option_into_view(self, option: str):
+        """选项行是横向列表，超长时向右滚动查找。"""
+        rv = self.dev.d(resourceId=OPTION_RV_ID)
         for _ in range(4):
-            bounds = self._option_bounds_under(category, option)
+            bounds = self._option_pill_bounds(option)
             if bounds is not None:
                 return bounds
-            if rv_id is None:
+            if not rv.exists:
                 return None
-            self.dev.d(resourceId=rv_id).scroll.forward()
-            time.sleep(1)
-        return self._option_bounds_under(category, option)
+            rv.scroll.forward()
+            time.sleep(0.8)
+        return self._option_pill_bounds(option)
 
-    def select_category_option(self, category: str, option: str, timeout: float = 8.0):
-        """展开分类并点选指定选项。"""
-        self.ensure_expanded(category, timeout)
-        # 点选选项（已是目标值则不点；离屏则滚动查找）
+    # ---------- 设置面板操作（D-pad 导航，与真实用户一致） ----------
+    # 注：横向 RecyclerView 的 accessibility scroll 对本面板无效（实测返回 False），
+    # 因此分类/选项行导航一律用方向键，RV 获得焦点后会自动滚动。
+
+    # 分类 chip 固定顺序
+    CHIP_ORDER = ["画质", "线路", "编码", "弹幕", "速度", "不透明度", "大小", "显示区域"]
+
+    def _focused_item_texts(self, container_id: str) -> list[str]:
+        """容器内当前焦点 item 的全部文本（chip: [名称, 值]；pill: [✓?, 标签]）。"""
+        root = ET.fromstring(self.dev.d.dump_hierarchy())
+        parent_map = {c: p for p in root.iter() for c in p}
+        for node in root.iter("node"):
+            if node.get("focused") != "true":
+                continue
+            parent = parent_map.get(node)
+            if parent is not None and parent.get("resource-id") == container_id:
+                return [d.get("text") for d in node.iter("node") if d.get("text")]
+        return []
+
+    def _focused_chip_name(self) -> str | None:
+        texts = self._focused_item_texts(CATEGORY_RV_ID)
+        return texts[0] if texts else None
+
+    def _focused_pill_label(self) -> str | None:
+        texts = self._focused_item_texts(OPTION_RV_ID)
+        return texts[-1] if texts else None
+
+    def focus_chip(self, category: str, timeout: float = 10.0):
+        """把焦点移动到目标分类 chip（进入面板行的方式：先点任一可见 chip）。"""
         deadline = time.time() + timeout
+        while time.time() < deadline:
+            focused = self._focused_chip_name()
+            if focused == category:
+                return
+            if focused is None:
+                # 焦点不在分类行：点击第一个可见 chip 进入
+                entered = False
+                for name in self.CHIP_ORDER:
+                    nodes = self._nodes_in_container(CATEGORY_RV_ID, name)
+                    if nodes:
+                        self._click_bounds(nodes[0])
+                        time.sleep(0.8)
+                        entered = True
+                        break
+                if not entered:
+                    raise AssertionError("分类行没有可见 chip（面板未打开？）")
+                continue
+            cur = self.CHIP_ORDER.index(focused)
+            target = self.CHIP_ORDER.index(category)
+            self.dev.key("DPAD_RIGHT" if target > cur else "DPAD_LEFT")
+            time.sleep(0.6)
+        raise AssertionError(f"无法聚焦分类: {category}")
+
+    def chip_exists(self, category: str) -> bool:
+        """分类 chip 是否存在（focus 导航验证，RV 会自动滚动显示）。"""
+        try:
+            self.focus_chip(category)
+            return True
+        except (AssertionError, ValueError):
+            return False
+
+    def _option_pills_in_order(self) -> list[str]:
+        """选项行当前可见 pill 文本，按从左到右顺序。"""
+        root = ET.fromstring(self.dev.d.dump_hierarchy())
+        parent_map = {c: p for p in root.iter() for c in p}
+        pills = []
+        for node in root.iter("node"):
+            t = node.get("text")
+            if not t or not node.get("bounds") or t == "✓":
+                continue
+            current = parent_map.get(node)
+            while current is not None:
+                if current.get("resource-id") == OPTION_RV_ID:
+                    pills.append((self._parse_bounds(node.get("bounds"))[0], t))
+                    break
+                current = parent_map.get(current)
+        return [t for _, t in sorted(pills)]
+
+    def select_category_option(self, category: str, option: str, timeout: float = 12.0):
+        """聚焦分类 chip → 进入选项行 → 移动到目标 pill → 确认选择。
+
+        注意：选项行端点继续按方向键焦点会逃逸回分类行（框架 focusSearch），
+        因此移动方向由 pill 的左右顺序计算，不做盲目试探。
+        """
+        deadline = time.time() + timeout
+        if self.category_value(category) == option:
+            return
+
+        self.focus_chip(category)
+
+        # 布尔分类：chip 上按确认直接切换，不进入选项行
+        if category == "弹幕":
+            while self.category_value("弹幕") != option:
+                assert time.time() < deadline, f"切换弹幕 -> {option} 失败"
+                self.dev.key("DPAD_CENTER")
+                time.sleep(1.0)
+            return
+
+        # 确认进入选项行（焦点落在当前选中 pill）
+        self.dev.key("DPAD_CENTER")
+        time.sleep(0.8)
+
         while self.category_value(category) != option:
             assert time.time() < deadline, f"选择 {category} -> {option} 失败"
-            bounds = self._scroll_until_option(category, option)
-            assert bounds, f"选项不可见: {option}"
-            self._click_bounds(bounds)
-            time.sleep(1.2)
+            focused = self._focused_pill_label()
+            if focused is None:
+                # 焦点逃逸回分类行：重新聚焦分类再进入
+                self.focus_chip(category)
+                self.dev.key("DPAD_CENTER")
+                time.sleep(0.8)
+                continue
+            if focused == option:
+                self.dev.key("DPAD_CENTER")
+                time.sleep(1.0)
+                continue
+            pills = self._option_pills_in_order()
+            if option not in pills or focused not in pills:
+                # 目标 pill 离屏或焦点读取异常：右移一位让列表滚动后重读
+                self.dev.key("DPAD_RIGHT")
+                time.sleep(0.6)
+                continue
+            direction = "DPAD_RIGHT" if pills.index(option) > pills.index(focused) else "DPAD_LEFT"
+            self.dev.key(direction)
+            time.sleep(0.6)
 
     def exit_to_home(self):
         """退出播放页回主列表：BACK 关面板 → BACK ×2 退出（3 秒窗口内）。"""

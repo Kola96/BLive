@@ -1,6 +1,5 @@
 package com.blive.tv.ui.play
 
-import android.graphics.Rect
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
@@ -12,7 +11,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.blive.tv.R
 import com.blive.tv.danmu.DanmuItem
@@ -27,6 +25,7 @@ import kotlinx.coroutines.launch
  *
  * 职责收敛为：View 绑定、遥控器按键分发、订阅 [LivePlayViewModel] 状态渲染。
  * 播放器生命周期见 [PlayerManager]，网络/刷新/弹幕/关注逻辑见 [LivePlayViewModel]。
+ * 设置面板为底部抽屉（分类 chip 行 + 选项 pill 行），见 [PlaySettingsPanelController]。
  */
 class LivePlayActivity : AppCompatActivity() {
 
@@ -37,18 +36,10 @@ class LivePlayActivity : AppCompatActivity() {
     private lateinit var loadingProgress: ProgressBar
     private lateinit var errorText: TextView
     private lateinit var settingsPanel: View
-    private lateinit var playSettingsRecyclerView: RecyclerView
-    private lateinit var danmuSettingsRecyclerView: RecyclerView
     private lateinit var simpleDanmuView: SimpleDanmuView
     private lateinit var roomInfoOverlay: View
     private lateinit var roomInfoController: RoomInfoOverlayController
-
-    private lateinit var playSettingsAdapter: PlaySettingsCategoryAdapter
-    private lateinit var danmuSettingsAdapter: PlaySettingsCategoryAdapter
     private lateinit var settingsPanelController: PlaySettingsPanelController
-
-    /** 设置面板展开状态（纯 UI 状态，跟随面板生命周期） */
-    private var currentExpandedCategory: String? = null
 
     private var lastBackPressedAt: Long = 0L
 
@@ -65,21 +56,8 @@ class LivePlayActivity : AppCompatActivity() {
         const val EXTRA_ANCHOR_MID = "anchor_mid"
         const val EXTRA_ANCHOR_NAME = "anchor_name"
         const val EXTRA_ROOM_TITLE = "room_title"
-        private const val CATEGORY_QUALITY = "quality"
-        private const val CATEGORY_CDN = "cdn"
-        private const val CATEGORY_CODEC = "codec"
-        private const val CATEGORY_DANMU_ENABLE = "danmu_enable"
-        private const val CATEGORY_DANMU_SPEED = "danmu_speed"
-        private const val CATEGORY_DANMU_OPACITY = "danmu_opacity"
-        private const val CATEGORY_DANMU_SIZE = "danmu_size"
-        private const val CATEGORY_DANMU_AREA = "danmu_area"
         private const val BACK_PRESS_EXIT_WINDOW_MS = 3000L
         private const val LONG_PRESS_THRESHOLD_MS = 2000L
-
-        private val DANMU_OPACITY_OPTIONS = listOf(0.25f, 0.5f, 0.75f, 1.0f)
-        private val DANMU_SIZE_OPTIONS = listOf(0.5f, 0.75f, 1.0f, 1.5f, 2.0f)
-        private val DANMU_SPEED_OPTIONS = listOf(0.5f, 1.0f, 1.5f, 2.0f)
-        private val DANMU_AREA_OPTIONS = listOf(1.0f, 0.5f, 0.25f)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,7 +75,6 @@ class LivePlayActivity : AppCompatActivity() {
 
         initViews()
         setupPlayer()
-        setupRecyclerViews()
         setupControllers()
         observeViewModel()
 
@@ -119,8 +96,6 @@ class LivePlayActivity : AppCompatActivity() {
         loadingProgress = findViewById(R.id.loading_progress)
         errorText = findViewById(R.id.error_text)
         settingsPanel = findViewById(R.id.settings_panel)
-        playSettingsRecyclerView = findViewById(R.id.play_settings_recycler_view)
-        danmuSettingsRecyclerView = findViewById(R.id.danmu_settings_recycler_view)
         simpleDanmuView = findViewById(R.id.simple_danmu_view)
         roomInfoOverlay = findViewById(R.id.room_info_overlay)
     }
@@ -135,55 +110,36 @@ class LivePlayActivity : AppCompatActivity() {
         playerManager.attach(playerView)
     }
 
-    private fun setupRecyclerViews() {
-        playSettingsRecyclerView.layoutManager = LinearLayoutManager(this)
-        danmuSettingsRecyclerView.layoutManager = LinearLayoutManager(this)
-
-        val spacingDecoration = object : RecyclerView.ItemDecoration() {
-            override fun getItemOffsets(
-                outRect: Rect,
-                view: View,
-                parent: RecyclerView,
-                state: RecyclerView.State
-            ) {
-                val position = parent.getChildAdapterPosition(view)
-                val adapter = parent.adapter as? PlaySettingsCategoryAdapter ?: return
-                if (position != RecyclerView.NO_POSITION) {
-                    val viewType = adapter.getItemViewType(position)
-                    // 分类项之间增加间距（第一项除外），0 为 TYPE_CATEGORY
-                    if (viewType == 0 && position > 0) {
-                        outRect.top = (16 * view.context.resources.displayMetrics.density).toInt()
-                    }
-                }
-            }
-        }
-        playSettingsRecyclerView.addItemDecoration(spacingDecoration)
-        danmuSettingsRecyclerView.addItemDecoration(spacingDecoration)
-
-        playSettingsAdapter = PlaySettingsCategoryAdapter(emptyList()) { item ->
-            onSettingsItemClicked(item)
-        }
-        danmuSettingsAdapter = PlaySettingsCategoryAdapter(emptyList()) { item ->
-            onSettingsItemClicked(item)
-        }
-        playSettingsRecyclerView.adapter = playSettingsAdapter
-        danmuSettingsRecyclerView.adapter = danmuSettingsAdapter
-    }
-
     private fun setupControllers() {
         settingsPanelController = PlaySettingsPanelController(
             settingsPanel = settingsPanel,
-            playerView = playerView,
-            playSettingsRecyclerView = playSettingsRecyclerView,
-            playSettingsAdapter = playSettingsAdapter,
-            qualityCategoryId = CATEGORY_QUALITY,
-            logTag = "LivePlayActivity"
+            categoryRecyclerView = findViewById(R.id.settings_category_recycler),
+            optionRecyclerView = findViewById(R.id.settings_option_recycler),
+            onToggleDanmu = {
+                viewModel.setDanmuEnabled(!viewModel.uiState.value.danmuEnabled)
+            },
+            onOptionSelected = { categoryId, optionId ->
+                onSettingOptionSelected(categoryId, optionId)
+            }
         )
         roomInfoController = RoomInfoOverlayController(
             roomInfoOverlay = roomInfoOverlay,
             playerView = playerView,
             logTag = "LivePlayActivity"
         )
+    }
+
+    private fun onSettingOptionSelected(categoryId: String, optionId: String) {
+        when (categoryId) {
+            PlaySettingIds.QUALITY -> viewModel.selectQuality(optionId.toInt())
+            PlaySettingIds.CDN -> viewModel.selectCdn(optionId)
+            PlaySettingIds.CODEC -> viewModel.selectCodec(optionId)
+            PlaySettingIds.DANMU_SWITCH -> viewModel.setDanmuEnabled(optionId == "1")
+            PlaySettingIds.DANMU_SPEED -> viewModel.setDanmuSpeed(optionId.toFloat())
+            PlaySettingIds.DANMU_OPACITY -> viewModel.setDanmuOpacity(optionId.toFloat())
+            PlaySettingIds.DANMU_SIZE -> viewModel.setDanmuSize(optionId.toFloat())
+            PlaySettingIds.DANMU_AREA -> viewModel.setDanmuArea(optionId.toFloat())
+        }
     }
 
     // ---------------- 状态订阅 ----------------
@@ -206,25 +162,23 @@ class LivePlayActivity : AppCompatActivity() {
                             }
                         }
                 }
-                // 播放设置面板数据
+                // 设置面板数据（chip 值与选项选中态随状态刷新）
                 launch {
-                    viewModel.uiState
-                        .map { PanelInput(it.qualityOptions, it.cdnOptions, it.codecOptions, it.selectedQn, it.selectedCdnHost, it.selectedCodec) }
-                        .distinctUntilChanged()
-                        .collect { updatePlayCategories() }
+                    viewModel.uiState.collect { state ->
+                        settingsPanelController.render(state)
+                    }
                 }
-                // 弹幕设置与弹幕 View
+                // 弹幕 View 属性
                 launch {
                     viewModel.uiState
-                        .map { DanmuSettings(it.danmuEnabled, it.danmuOpacity, it.danmuSize, it.danmuSpeed, it.danmuArea) }
+                        .map { DanmuProps(it.danmuEnabled, it.danmuOpacity, it.danmuSize, it.danmuSpeed, it.danmuArea) }
                         .distinctUntilChanged()
-                        .collect { settings ->
-                            simpleDanmuView.isDanmuEnabled = settings.enabled
-                            simpleDanmuView.danmuAlpha = settings.opacity
-                            simpleDanmuView.danmuSizeScale = settings.size
-                            simpleDanmuView.danmuSpeedScale = settings.speed
-                            simpleDanmuView.danmuAreaRatio = settings.area
-                            updateDanmuCategories()
+                        .collect { props ->
+                            simpleDanmuView.isDanmuEnabled = props.enabled
+                            simpleDanmuView.danmuAlpha = props.opacity
+                            simpleDanmuView.danmuSizeScale = props.size
+                            simpleDanmuView.danmuSpeedScale = props.speed
+                            simpleDanmuView.danmuAreaRatio = props.area
                         }
                 }
                 // 关注状态
@@ -265,16 +219,7 @@ class LivePlayActivity : AppCompatActivity() {
         }
     }
 
-    private data class PanelInput(
-        val qualityOptions: List<QualityOption>,
-        val cdnOptions: List<CdnOption>,
-        val codecOptions: List<CodecOption>,
-        val selectedQn: Int,
-        val selectedCdnHost: String,
-        val selectedCodec: String
-    )
-
-    private data class DanmuSettings(
+    private data class DanmuProps(
         val enabled: Boolean,
         val opacity: Float,
         val size: Float,
@@ -305,232 +250,12 @@ class LivePlayActivity : AppCompatActivity() {
         }
     }
 
-    // ---------------- 设置面板 ----------------
-
-    private fun onSettingsItemClicked(item: SettingsItem) {
-        when (item) {
-            is PlaySettingsCategory -> onCategoryClicked(item)
-            is PlaySettingsOption -> onOptionClicked(item)
-        }
-    }
-
-    private fun onCategoryClicked(category: PlaySettingsCategory) {
-        if (currentExpandedCategory == category.id) {
-            collapseAllCategories(focusCategoryId = category.id)
-        } else {
-            currentExpandedCategory = category.id
-            refreshPanels(focusTargetId = null, shouldFocusSelectedOption = true)
-        }
-    }
-
-    private fun onOptionClicked(option: PlaySettingsOption) {
-        when (option.categoryId) {
-            CATEGORY_QUALITY -> viewModel.selectQuality(option.id.toInt())
-            CATEGORY_CDN -> viewModel.selectCdn(option.id)
-            CATEGORY_CODEC -> viewModel.selectCodec(option.id)
-            CATEGORY_DANMU_ENABLE -> viewModel.setDanmuEnabled(option.id == "1")
-            CATEGORY_DANMU_SPEED -> viewModel.setDanmuSpeed(option.id.toFloat())
-            CATEGORY_DANMU_OPACITY -> viewModel.setDanmuOpacity(option.id.toFloat())
-            CATEGORY_DANMU_SIZE -> viewModel.setDanmuSize(option.id.toFloat())
-            CATEGORY_DANMU_AREA -> viewModel.setDanmuArea(option.id.toFloat())
-        }
-        refreshPanels(focusTargetId = option.id)
-    }
-
-    private fun collapseAllCategories(focusCategoryId: String? = null) {
-        currentExpandedCategory = null
-        refreshPanels(focusTargetId = focusCategoryId)
-    }
-
-    private fun refreshPanels(focusTargetId: String? = null, shouldFocusSelectedOption: Boolean = false) {
-        updatePlayCategories()
-        updateDanmuCategories()
-        if (focusTargetId != null || shouldFocusSelectedOption) {
-            playSettingsRecyclerView.post {
-                restoreFocus(playSettingsRecyclerView, playSettingsAdapter, focusTargetId, shouldFocusSelectedOption)
-            }
-            danmuSettingsRecyclerView.post {
-                restoreFocus(danmuSettingsRecyclerView, danmuSettingsAdapter, focusTargetId, shouldFocusSelectedOption)
-            }
-        }
-    }
-
-    private fun updatePlayCategories() {
-        val state = viewModel.uiState.value
-        val categories = listOf(
-            PlaySettingsCategory(
-                id = CATEGORY_QUALITY,
-                name = "画质",
-                currentValue = state.qualityOptions.find { it.qn == state.selectedQn }?.name ?: "未知",
-                isExpanded = currentExpandedCategory == CATEGORY_QUALITY
-            ),
-            PlaySettingsCategory(
-                id = CATEGORY_CDN,
-                name = "线路",
-                currentValue = state.cdnOptions.find { it.host == state.selectedCdnHost }?.cdnName ?: "未知",
-                isExpanded = currentExpandedCategory == CATEGORY_CDN
-            ),
-            PlaySettingsCategory(
-                id = CATEGORY_CODEC,
-                name = "编码",
-                currentValue = state.codecOptions.find { it.codecName == state.selectedCodec }?.displayName ?: "未知",
-                isExpanded = currentExpandedCategory == CATEGORY_CODEC
-            )
-        )
-
-        val displayList = mutableListOf<SettingsItem>()
-        for (category in categories) {
-            displayList.add(category)
-            if (category.isExpanded) {
-                when (category.id) {
-                    CATEGORY_QUALITY -> displayList.addAll(state.qualityOptions.map {
-                        PlaySettingsOption(it.qn.toString(), it.name, it.qn == state.selectedQn, category.id)
-                    })
-                    CATEGORY_CDN -> displayList.addAll(state.cdnOptions.map {
-                        PlaySettingsOption(it.host, it.cdnName, it.host == state.selectedCdnHost, category.id)
-                    })
-                    CATEGORY_CODEC -> displayList.addAll(state.codecOptions.map {
-                        PlaySettingsOption(it.codecName, it.displayName, it.codecName == state.selectedCodec, category.id)
-                    })
-                }
-            }
-        }
-        playSettingsAdapter.updateItems(displayList)
-    }
-
-    private fun updateDanmuCategories() {
-        val state = viewModel.uiState.value
-        // 吸附到最近的有效档位
-        val snappedOpacity = DANMU_OPACITY_OPTIONS.minBy { kotlin.math.abs(it - state.danmuOpacity) }
-        val snappedSize = DANMU_SIZE_OPTIONS.minBy { kotlin.math.abs(it - state.danmuSize) }
-        val snappedSpeed = DANMU_SPEED_OPTIONS.minBy { kotlin.math.abs(it - state.danmuSpeed) }
-        val snappedArea = DANMU_AREA_OPTIONS.minBy { kotlin.math.abs(it - state.danmuArea) }
-
-        val categories = listOf(
-            PlaySettingsCategory(
-                id = CATEGORY_DANMU_ENABLE,
-                name = "开关",
-                currentValue = if (state.danmuEnabled) "开启" else "关闭",
-                isExpanded = currentExpandedCategory == CATEGORY_DANMU_ENABLE
-            ),
-            PlaySettingsCategory(
-                id = CATEGORY_DANMU_SPEED,
-                name = "速度",
-                currentValue = danmuSpeedDisplayName(snappedSpeed),
-                isExpanded = currentExpandedCategory == CATEGORY_DANMU_SPEED
-            ),
-            PlaySettingsCategory(
-                id = CATEGORY_DANMU_OPACITY,
-                name = "不透明度",
-                currentValue = "${(snappedOpacity * 100).toInt()}%",
-                isExpanded = currentExpandedCategory == CATEGORY_DANMU_OPACITY
-            ),
-            PlaySettingsCategory(
-                id = CATEGORY_DANMU_SIZE,
-                name = "大小",
-                currentValue = "${(snappedSize * 100).toInt()}%",
-                isExpanded = currentExpandedCategory == CATEGORY_DANMU_SIZE
-            ),
-            PlaySettingsCategory(
-                id = CATEGORY_DANMU_AREA,
-                name = "显示区域",
-                currentValue = danmuAreaDisplayName(snappedArea),
-                isExpanded = currentExpandedCategory == CATEGORY_DANMU_AREA
-            )
-        )
-
-        val displayList = mutableListOf<SettingsItem>()
-        for (category in categories) {
-            displayList.add(category)
-            if (category.isExpanded) {
-                when (category.id) {
-                    CATEGORY_DANMU_ENABLE -> {
-                        displayList.add(PlaySettingsOption("1", "开启", state.danmuEnabled, category.id))
-                        displayList.add(PlaySettingsOption("0", "关闭", !state.danmuEnabled, category.id))
-                    }
-                    CATEGORY_DANMU_SPEED -> displayList.addAll(DANMU_SPEED_OPTIONS.map {
-                        PlaySettingsOption(it.toString(), danmuSpeedDisplayName(it), it == snappedSpeed, category.id)
-                    })
-                    CATEGORY_DANMU_OPACITY -> displayList.addAll(DANMU_OPACITY_OPTIONS.map {
-                        PlaySettingsOption(it.toString(), "${(it * 100).toInt()}%", it == snappedOpacity, category.id)
-                    })
-                    CATEGORY_DANMU_SIZE -> displayList.addAll(DANMU_SIZE_OPTIONS.map {
-                        PlaySettingsOption(it.toString(), "${(it * 100).toInt()}%", it == snappedSize, category.id)
-                    })
-                    CATEGORY_DANMU_AREA -> displayList.addAll(DANMU_AREA_OPTIONS.map {
-                        PlaySettingsOption(it.toString(), danmuAreaDisplayName(it), it == snappedArea, category.id)
-                    })
-                }
-            }
-        }
-        danmuSettingsAdapter.updateItems(displayList)
-    }
-
-    private fun danmuSpeedDisplayName(speed: Float): String = when (speed) {
-        0.5f -> "慢速"
-        1.5f -> "快速"
-        2.0f -> "极速"
-        else -> "正常"
-    }
-
-    private fun danmuAreaDisplayName(area: Float): String = when (area) {
-        0.5f -> "半屏"
-        0.25f -> "1/4屏"
-        else -> "全屏"
-    }
-
-    private fun restoreFocus(
-        recyclerView: RecyclerView,
-        adapter: PlaySettingsCategoryAdapter,
-        targetId: String?,
-        focusSelected: Boolean
-    ) {
-        val items = adapter.getItems()
-        var position = -1
-
-        if (targetId != null) {
-            position = items.indexOfFirst { it.id == targetId }
-        }
-
-        if (position == -1 && focusSelected && currentExpandedCategory != null) {
-            // 找到当前展开分类下选中的选项
-            position = items.indexOfFirst {
-                it is PlaySettingsOption && it.categoryId == currentExpandedCategory && it.isSelected
-            }
-            if (position == -1) {
-                position = items.indexOfFirst {
-                    it is PlaySettingsOption && it.categoryId == currentExpandedCategory
-                }
-            }
-        }
-
-        if (position != -1) {
-            val viewHolder = recyclerView.findViewHolderForAdapterPosition(position)
-            if (viewHolder != null) {
-                viewHolder.itemView.requestFocus()
-            } else {
-                // ViewHolder 未创建（屏幕外），先滚动再聚焦
-                recyclerView.scrollToPosition(position)
-                recyclerView.post {
-                    recyclerView.findViewHolderForAdapterPosition(position)
-                        ?.itemView?.requestFocus()
-                }
-            }
-        }
-    }
-
     // ---------------- 按键处理 ----------------
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (settingsPanelController.recoverFocusIfNeeded(keyCode, currentFocus)) {
-            return true
-        }
-
         when (keyCode) {
             KeyEvent.KEYCODE_MENU -> {
-                settingsPanelController.toggle {
-                    collapseAllCategories()
-                }
+                settingsPanelController.toggle()
                 return true
             }
             KeyEvent.KEYCODE_DPAD_CENTER -> {
@@ -558,13 +283,7 @@ class LivePlayActivity : AppCompatActivity() {
                     return true
                 }
                 if (settingsPanelController.isVisible) {
-                    if (currentExpandedCategory != null) {
-                        collapseAllCategories(focusCategoryId = currentExpandedCategory)
-                        return true
-                    }
-                    settingsPanelController.hide {
-                        collapseAllCategories()
-                    }
+                    settingsPanelController.hide()
                     return true
                 }
                 val now = System.currentTimeMillis()

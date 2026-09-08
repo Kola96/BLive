@@ -64,7 +64,7 @@ class Device:
 
     def logcat(self, pattern: str = "") -> list[str]:
         out = subprocess.run(
-            [self.adb, "logcat", "-d"], capture_output=True, text=True
+            [self.adb, "logcat", "-d"], capture_output=True, text=True, errors="replace"
         ).stdout
         return [l for l in out.splitlines() if pattern in l]
 
