@@ -34,103 +34,51 @@
         android:textSize="18sp"
         android:visibility="gone" />
 
-    <FrameLayout
+    <!-- 底部抽屉设置面板：分类行 + 选项行，不遮挡大部分画面 -->
+    <LinearLayout
         android:id="@+id/settings_panel"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="#CC000000"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="@drawable/panel_bottom_background"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="20dp"
+        android:paddingBottom="20dp"
         android:visibility="gone"
-        android:focusable="true"
-        android:focusableInTouchMode="true">
+        android:clipToPadding="false"
+        android:clipChildren="false">
 
-        <LinearLayout
+        <!-- 分类行（横向） -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/settings_category_recycler"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="center"
             android:orientation="horizontal"
-            android:padding="32dp">
+            android:clipToPadding="false"
+            android:clipChildren="false"
+            android:padding="4dp" />
 
-            <View
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
+        <!-- 分隔线 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#33FFFFFF"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp" />
 
-            <!-- 播放设置列 -->
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:clipChildren="false"
-                android:clipToPadding="false">
+        <!-- 选项行（横向，跟随分类行焦点切换） -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/settings_option_recycler"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:clipToPadding="false"
+            android:clipChildren="false"
+            android:padding="4dp" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="播放设置"
-                    android:textColor="#FFFFFF"
-                    android:textSize="24sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="24dp" />
-
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/play_settings_recycler_view"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="16dp"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
-                    android:clipToPadding="false"
-                    android:focusable="true"
-                    android:focusableInTouchMode="true" />
-
-            </LinearLayout>
-
-            <View
-                android:layout_width="1dp"
-                android:layout_height="match_parent"
-                android:background="#444444"
-                android:layout_marginStart="32dp"
-                android:layout_marginEnd="32dp" />
-
-            <!-- 弹幕设置列 -->
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:clipChildren="false"
-                android:clipToPadding="false">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="弹幕设置"
-                    android:textColor="#FFFFFF"
-                    android:textSize="24sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="24dp" />
-
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/danmu_settings_recycler_view"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
-                    android:clipToPadding="false"
-                    android:focusable="true"
-                    android:focusableInTouchMode="true" />
-
-            </LinearLayout>
-
-            <View
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
-
-        </LinearLayout>
-
-    </FrameLayout>
+    </LinearLayout>
 
     <include
         layout="@layout/room_info_overlay"
