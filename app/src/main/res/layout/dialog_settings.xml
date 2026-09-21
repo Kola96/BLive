@@ -1,11 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="24dp"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="match_parent"
     android:background="@drawable/dialog_background"
-    android:minWidth="350dp">
+    android:focusable="false">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:minWidth="350dp"
+        android:descendantFocusability="afterDescendants">
 
     <TextView
         android:id="@+id/tv_title"
@@ -305,6 +311,86 @@
             android:paddingStart="8dp" />
     </LinearLayout>
 
+    <!-- 更新源 -->
+    <LinearLayout
+        android:id="@+id/container_update_source"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:focusable="true"
+        android:background="@drawable/option_selector_background"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/update_source_label"
+            android:textSize="18sp"
+            android:textColor="@android:color/white"
+            android:layout_weight="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="&lt;"
+            android:textSize="18sp"
+            android:textColor="#80FFFFFF"
+            android:paddingEnd="8dp" />
+
+        <TextView
+            android:id="@+id/tv_update_source_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/update_source_auto"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:minWidth="60dp"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="&gt;"
+            android:textSize="18sp"
+            android:textColor="#80FFFFFF"
+            android:paddingStart="8dp" />
+    </LinearLayout>
+
+    <!-- 检查更新 -->
+    <LinearLayout
+        android:id="@+id/container_check_update"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:focusable="true"
+        android:background="@drawable/option_selector_background"
+        android:layout_marginBottom="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/update_check_label"
+            android:textSize="18sp"
+            android:textColor="@android:color/white"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/tv_check_update_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/update_check_action"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:minWidth="60dp"
+            android:gravity="center" />
+    </LinearLayout>
+
     <Button
         android:id="@+id/btn_close"
         android:layout_width="match_parent"
@@ -315,4 +401,5 @@
         android:background="@drawable/option_selector_background"
         android:padding="12dp" />
 
-</LinearLayout>
+    </LinearLayout>
+</ScrollView>

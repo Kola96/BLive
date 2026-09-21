@@ -46,6 +46,9 @@ import com.blive.tv.ui.main.MineActionTarget
 import com.blive.tv.ui.main.UserProfile
 import com.blive.tv.ui.play.LivePlayActivity
 import com.blive.tv.ui.settings.SettingsDialogFragment
+import com.blive.tv.ui.settings.update.UpdateDialogFragment
+import com.blive.tv.ui.settings.update.UpdateViewModel
+import com.blive.tv.utils.ApkInstaller
 import com.blive.tv.utils.ToastHelper
 import com.blive.tv.utils.TokenManager
 import com.bumptech.glide.Glide
@@ -64,6 +67,8 @@ class MainActivity : AppCompatActivity() {
     private val loginViewModel: LoginViewModel by viewModels {
         LoginViewModelFactory(LoginRepository(applicationContext))
     }
+
+    private val updateViewModel: UpdateViewModel by viewModels()
 
     private lateinit var viewRefs: MainViewRefs
     private lateinit var uiRenderer: MainUiRenderer
@@ -142,7 +147,11 @@ class MainActivity : AppCompatActivity() {
         initControllers()
         setupListeners()
         observeViewModel()
+        observeUpdateState()
         refreshByLoginState()
+
+        // 启动后自动检查一次更新（不影响 UI，发现新版本才弹窗）
+        updateViewModel.autoCheck()
     }
 
     private fun initAreaTags() {
@@ -487,8 +496,7 @@ class MainActivity : AppCompatActivity() {
         btnClearHistory.setOnKeyListener(searchLeftKeyHandler)
     }
 
-    private fun observeViewModel() {
-        lifecycleScope.launch {
+    private fun observeViewModel() {lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     viewModel.screenState.collect { state ->
@@ -639,6 +647,43 @@ class MainActivity : AppCompatActivity() {
                         when (event) {
                             is LoginEvent.ShowToast -> ToastHelper.showTextToast(this@MainActivity, event.message)
                             is LoginEvent.NavigateToMain -> refreshByLoginState()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 观察 UpdateViewModel：
+     * - UpdateAvailable：弹出更新对话框（自动检查或手动设置页触发的"检查更新"都会到这里）
+     * - events：处理"跳系统设置请求安装权限"和 Toast
+     */
+    private fun observeUpdateState() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    updateViewModel.checkState.collect { state ->
+                        if (state is UpdateViewModel.CheckState.UpdateAvailable) {
+                            if (supportFragmentManager.findFragmentByTag(UpdateDialogFragment.TAG) == null
+                                && !supportFragmentManager.isStateSaved
+                                && !isFinishing
+                                && !isDestroyed
+                            ) {
+                                UpdateDialogFragment().show(supportFragmentManager, UpdateDialogFragment.TAG)
+                            }
+                        }
+                    }
+                }
+                launch {
+                    updateViewModel.events.collect { event ->
+                        when (event) {
+                            is UpdateViewModel.UpdateEvent.Toast -> {
+                                ToastHelper.showTextToast(this@MainActivity, event.message)
+                            }
+                            UpdateViewModel.UpdateEvent.RequestInstallPermission -> {
+                                ApkInstaller.openInstallPermissionSettings(this@MainActivity)
+                            }
                         }
                     }
                 }
