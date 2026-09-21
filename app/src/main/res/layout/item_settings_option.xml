@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 设置对话框右侧设置项：标签 + 左右箭头 + 当前值 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="14dp"
+    android:layout_marginBottom="8dp"
+    android:focusable="true"
+    android:background="@drawable/option_selector_background">
+
+    <TextView
+        android:id="@+id/tv_setting_label"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="@android:color/white"
+        android:textSize="17sp" />
+
+    <TextView
+        android:id="@+id/tv_arrow_left"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="&lt;"
+        android:textSize="17sp"
+        android:textColor="#80FFFFFF"
+        android:paddingEnd="8dp" />
+
+    <TextView
+        android:id="@+id/tv_setting_value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@android:color/white"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:minWidth="70dp"
+        android:gravity="center" />
+
+    <TextView
+        android:id="@+id/tv_arrow_right"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="&gt;"
+        android:textSize="17sp"
+        android:textColor="#80FFFFFF"
+        android:paddingStart="8dp" />
+
+</LinearLayout>
