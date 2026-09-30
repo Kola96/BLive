@@ -238,22 +238,27 @@
 </LinearLayout>
 
     <!-- 右侧主内容区 -->
+    <!-- clipChildren/clipToPadding=false：放行子容器内容与 elevation 阴影绘制到 padding 区。
+         注意：阴影要逃出多层容器，链条上每一层的 clipChildren 都必须为 false -->
     <FrameLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
-        android:padding="30dp">
+        android:padding="30dp"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
         <!-- 1. 登录页容器 -->
         <RelativeLayout
             android:id="@+id/login_container"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:clipChildren="false"
             android:visibility="gone">
 
             <androidx.cardview.widget.CardView
                 android:layout_width="400dp"
-                android:layout_height="500dp"
+                android:layout_height="460dp"
                 android:layout_centerInParent="true"
                 app:cardBackgroundColor="#23242A"
                 app:cardCornerRadius="24dp"
