@@ -100,7 +100,9 @@ class MainActivity : AppCompatActivity() {
     private val qrCodeFactory = QrCodeBitmapFactory(220)
     private var lastQrCodeUrl: String? = null
 
-    private var isLoggedIn: Boolean = false
+    // null = 尚未收到首次状态发射。冷启动未登录时前后都是 false，
+    // 若用 false 初始化会被"变化检测"跳过 renderLoginState，侧边栏保持 XML 默认（登录 tab 隐藏、其余 tab 可见）
+    private var isLoggedIn: Boolean? = null
     private var lastClickedRoomId: Long = -1L
     private var lastRenderedRoomKey: String = ""
     private var lastAdapterDataKey: String = ""
