@@ -93,8 +93,8 @@ class PartitionFocusRestoreTest {
 
     private fun sampleRooms(): List<LiveRoom> {
         return listOf(
-            LiveRoom(2001L, "", "", "", "", ""),
-            LiveRoom(2002L, "", "", "", "", "")
+            LiveRoom(roomId = 2001L, coverUrl = "", anchorName = "", anchorAvatar = "", roomTitle = "", areaName = ""),
+            LiveRoom(roomId = 2002L, coverUrl = "", anchorName = "", anchorAvatar = "", roomTitle = "", areaName = "")
         )
     }
 }

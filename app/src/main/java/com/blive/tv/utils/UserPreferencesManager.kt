@@ -10,6 +10,8 @@ object UserPreferencesManager {
     private const val KEY_DANMAKU_ENABLED = "danmaku_enabled"
     private const val KEY_DANMAKU_SIZE_SCALE = "danmaku_size_scale"
     private const val KEY_DANMAKU_ALPHA = "danmaku_alpha"
+    private const val KEY_DANMAKU_SPEED = "danmaku_speed"
+    private const val KEY_DANMAKU_AREA = "danmaku_area"
 
     private fun getPreferences(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -45,5 +47,22 @@ object UserPreferencesManager {
 
     fun setDanmakuAlpha(context: Context, value: Float) {
         getPreferences(context).edit().putFloat(KEY_DANMAKU_ALPHA, value).apply()
+    }
+
+    fun getDanmakuSpeed(context: Context): Float {
+        return getPreferences(context).getFloat(KEY_DANMAKU_SPEED, 1.0f)
+    }
+
+    fun setDanmakuSpeed(context: Context, value: Float) {
+        getPreferences(context).edit().putFloat(KEY_DANMAKU_SPEED, value).apply()
+    }
+
+    /** 弹幕显示区域占屏比例：1.0=全屏，0.5=上半屏，0.25=顶部四分之一 */
+    fun getDanmakuArea(context: Context): Float {
+        return getPreferences(context).getFloat(KEY_DANMAKU_AREA, 1.0f)
+    }
+
+    fun setDanmakuArea(context: Context, value: Float) {
+        getPreferences(context).edit().putFloat(KEY_DANMAKU_AREA, value).apply()
     }
 }

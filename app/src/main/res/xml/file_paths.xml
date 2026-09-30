@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 外部存储的下载目录，用于 FileProvider 分享下载的 APK -->
+    <external-files-path name="external_downloads" path="Download/" />
+    <!-- 内部存储 files 目录（getExternalFilesDir 不可用时回退到这里） -->
+    <files-path name="internal_files" path="." />
+</paths>

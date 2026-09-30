@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="28dp"
+    android:background="@drawable/dialog_background"
+    android:minWidth="560dp"
+    android:maxWidth="760dp">
+
+    <!-- 标题：发现新版本 vX.X.X -->
+    <TextView
+        android:id="@+id/tv_update_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="@string/update_available_title"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/white" />
+
+    <!-- 副标题：来源 + 发布时间 + 大小 -->
+    <TextView
+        android:id="@+id/tv_update_meta"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:textSize="14sp"
+        android:textColor="#B3FFFFFF" />
+
+    <!-- 更新日志标题 + 滚动指示 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/update_changelog_title"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white" />
+
+        <!-- 滚动位置指示器（"2 / 5"），仅当内容超出时显示 -->
+        <TextView
+            android:id="@+id/tv_scroll_indicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:textColor="#80FFFFFF"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 更新日志容器：可聚焦，获焦时 DPAD_UP/DOWN 滚动 -->
+    <FrameLayout
+        android:id="@+id/changelog_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:minHeight="120dp"
+        android:maxHeight="300dp"
+        android:focusable="true"
+        android:background="@drawable/option_selector_background"
+        android:padding="14dp">
+
+        <ScrollView
+            android:id="@+id/scroll_changelog"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:focusable="false"
+            android:overScrollMode="never"
+            android:requiresFadingEdge="vertical"
+            android:fadingEdgeLength="24dp">
+
+            <TextView
+                android:id="@+id/tv_changelog"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="15sp"
+                android:lineSpacingMultiplier="1.35"
+                android:textColor="#E6FFFFFF" />
+        </ScrollView>
+    </FrameLayout>
+
+    <!-- 下载进度区（默认隐藏） -->
+    <LinearLayout
+        android:id="@+id/container_progress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:layout_marginTop="16dp">
+
+        <ProgressBar
+            android:id="@+id/progress_download"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="0" />
+
+        <TextView
+            android:id="@+id/tv_progress_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textSize="14sp"
+            android:textColor="#B3FFFFFF" />
+    </LinearLayout>
+
+    <!-- 错误信息（默认隐藏） -->
+    <TextView
+        android:id="@+id/tv_error"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:layout_marginTop="12dp"
+        android:textSize="15sp"
+        android:textColor="#FF6B6B" />
+
+    <!-- 按钮区 -->
+    <LinearLayout
+        android:id="@+id/container_buttons"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="20dp"
+        android:gravity="end">
+
+        <Button
+            android:id="@+id/btn_negative"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="120dp"
+            android:text="@string/update_ignore"
+            android:textSize="16sp"
+            android:textColor="@android:color/white"
+            android:background="@drawable/option_selector_background"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:layout_marginEnd="12dp" />
+
+        <Button
+            android:id="@+id/btn_neutral"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="120dp"
+            android:text="@string/update_later"
+            android:textSize="16sp"
+            android:textColor="@android:color/white"
+            android:background="@drawable/option_selector_background"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:layout_marginEnd="12dp" />
+
+        <Button
+            android:id="@+id/btn_positive"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="140dp"
+            android:text="@string/update_now"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:background="@drawable/option_selector_background"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp" />
+    </LinearLayout>
+</LinearLayout>

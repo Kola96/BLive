@@ -4,6 +4,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- App 内更新需要安装未知来源应用权限（Android 8.0+ 动态申请） -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- 移除 zxing 库引入的摄像头权限 -->
     <uses-permission android:name="android.permission.CAMERA" tools:node="remove" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -37,6 +39,17 @@
             android:label="@string/app_name"
             android:theme="@style/Theme.BLiveTV.Leanback"
             android:screenOrientation="landscape" />
+
+        <!-- App 内更新用：暴露下载的 APK 给系统安装器 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

@@ -1,6 +1,5 @@
 package com.blive.tv.danmu
 
-import android.util.Log
 import com.google.gson.JsonParser
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -9,7 +8,6 @@ import java.nio.ByteOrder
  * 弹幕解析器，用于解析B站WebSocket返回的二进制数据
  */
 class DanmuParser {
-    private val TAG = "DanmuParser"
     private val jsonParser = JsonParser()
 
     /**
@@ -27,7 +25,6 @@ class DanmuParser {
             val op = buffer.getInt()
             val seq = buffer.getInt()
 
-            Log.d(TAG, "Packet header: packetLen=$packetLen, headerLen=$headerLen, ver=$ver, op=$op, seq=$seq")
 
             // 解析正文
             val bodyLen = packetLen - headerLen
@@ -42,7 +39,6 @@ class DanmuParser {
                 }
                 5 -> {
                     // 弹幕消息，根据版本处理不同压缩类型
-                    Log.d(TAG, "Business message with version $ver, body size: ${body.size} bytes")
                     when (ver) {
                         0, 1 -> {
                             // 原始JSON或未压缩消息，直接处理
@@ -50,28 +46,21 @@ class DanmuParser {
                         }
                         2 -> {
                             // Deflate压缩
-                            Log.d(TAG, "Processing Deflate compressed message")
                             try {
                                 val decompressed = decompressZlib(body)
-                                Log.d(TAG, "Decompressed to ${decompressed.size} bytes")
                                 messages.addAll(parseBinaryData(decompressed))
                             } catch (e: Exception) {
-                                Log.e(TAG, "Failed to decompress Deflate data", e)
                             }
                         }
                         3 -> {
                             // Brotli压缩
-                            Log.d(TAG, "Processing Brotli compressed message")
                             try {
                                 val decompressed = decompressBrotli(body)
-                                Log.d(TAG, "Decompressed to ${decompressed.size} bytes")
                                 messages.addAll(parseBinaryData(decompressed))
                             } catch (e: Exception) {
-                                Log.e(TAG, "Failed to decompress Brotli data", e)
                             }
                         }
                         else -> {
-                            Log.d(TAG, "Unknown protocol version for business message: $ver")
                         }
                     }
                 }
@@ -80,7 +69,6 @@ class DanmuParser {
                     handleAuthSuccess(body, messages)
                 }
                 else -> {
-                    Log.d(TAG, "Unknown op type: $op")
                 }
             }
         }
@@ -92,10 +80,9 @@ class DanmuParser {
      * 解压缩zlib数据
      */
     private fun decompressZlib(data: ByteArray): ByteArray {
+        // 完整 zlib 流（含 2 字节头），由 Inflater 自行校验
         val inflater = java.util.zip.Inflater()
-        // 跳过zlib头(2字节)
-        val dataToUse = if (data.size > 2) data.copyOfRange(2, data.size) else data
-        inflater.setInput(dataToUse)
+        inflater.setInput(data)
         val outputStream = java.io.ByteArrayOutputStream()
         val buffer = ByteArray(1024)
         while (!inflater.finished()) {
@@ -124,7 +111,6 @@ class DanmuParser {
                 outputStream.toByteArray()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to decompress Brotli data", e)
             ByteArray(0)
         }
     }
@@ -134,7 +120,6 @@ class DanmuParser {
      */
     private fun handleHeartbeat(body: ByteArray, messages: MutableList<DanmuMessage>) {
         val popularity = String(body, Charsets.UTF_8).toLongOrNull() ?: 0
-        Log.d(TAG, "Heartbeat received, popularity: $popularity")
         // 心跳包不需要生成弹幕消息
     }
 
@@ -143,7 +128,6 @@ class DanmuParser {
      */
     private fun handleBusinessMessage(body: ByteArray, messages: MutableList<DanmuMessage>) {
         val jsonString = String(body, Charsets.UTF_8)
-        Log.d(TAG, "Business message: $jsonString")
 
         // 处理多条JSON消息拼接的情况（以\x00分隔）
         val jsonParts = jsonString.split("\u0000")
@@ -159,13 +143,11 @@ class DanmuParser {
                         "SEND_GIFT" -> parseGiftMessage(jsonObject, messages)
                         "INTERACT_WORD" -> parseInteractMessage(jsonObject, messages)
                         else -> {
-                            Log.d(TAG, "Unknown cmd: $cmd")
                             messages.add(DanmuMessage.Other(cmd, emptyMap()))
                         }
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to parse business message: $part", e)
             }
         }
     }
@@ -175,9 +157,7 @@ class DanmuParser {
      */
     private fun handleAuthSuccess(body: ByteArray, messages: MutableList<DanmuMessage>) {
         val jsonString = String(body, Charsets.UTF_8)
-        Log.d(TAG, "Auth success: $jsonString")
         // 打印body的十六进制表示，以便查看详细内容
-        Log.d(TAG, "Auth success body hex: ${body.joinToString(" ") { "%02X".format(it) }}")
         // 认证成功不需要生成弹幕消息
     }
 
@@ -213,7 +193,6 @@ class DanmuParser {
                 )
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse danmu message", e)
         }
     }
 
@@ -239,7 +218,6 @@ class DanmuParser {
                 )
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse gift message", e)
         }
     }
 
@@ -261,7 +239,6 @@ class DanmuParser {
                 )
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse interact message", e)
         }
     }
 }

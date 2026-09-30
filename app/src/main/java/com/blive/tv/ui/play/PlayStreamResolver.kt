@@ -36,17 +36,18 @@ data class PanelOptions(
     val cdnOptions: List<CdnOption>
 )
 
-data class PlayOptionParseResult(
-    val selectedQn: Int,
-    val selectedCdnHost: String,
-    val qualityOptions: List<QualityOption>,
-    val cdnOptions: List<CdnOption>,
-    val codecOptions: List<CodecOption>
-)
-
 class PlayStreamResolver {
     private val preferredProtocolList = listOf("http_stream", "http_hls")
     private val preferredFormatList = listOf("flv", "ts", "fmp4")
+
+    /**
+     * 该编码+封装组合是否可被 ExoPlayer 播放。
+     * B站的 hevc+flv 是增强 RTMP 封装（FLV codec id 12），
+     * ExoPlayer 的 FlvExtractor 只支持 AVC，hevc 只能走 HLS（ts/fmp4）。
+     */
+    private fun isPlayable(codecName: String, formatName: String): Boolean {
+        return !(codecName == "hevc" && formatName == "flv")
+    }
 
     fun buildCapabilityGraph(data: RoomPlayInfoData): CapabilityGraph {
         val capabilities = mutableListOf<StreamCapability>()
@@ -54,6 +55,7 @@ class PlayStreamResolver {
         for (stream in data.playurlInfo.playurl.stream) {
             for (format in stream.format) {
                 for (codec in format.codec) {
+                    if (!isPlayable(codec.codecName, format.formatName)) continue
                     qualityCandidates.add(codec.currentQn)
                     qualityCandidates.addAll(codec.acceptQn)
                     for (urlInfo in codec.urlInfo) {
@@ -150,48 +152,6 @@ class PlayStreamResolver {
         )
     }
 
-    fun parseOptions(
-        data: RoomPlayInfoData,
-        preferredQn: Int,
-        currentSelectedCdnHost: String,
-        selectedCodec: String
-    ): PlayOptionParseResult {
-        val graph = buildCapabilityGraph(data)
-        val qualitySet = graph.qualityCandidates
-        val bestQn = chooseBestQuality(qualitySet, preferredQn)
-        val panelOptions = buildPanelOptions(graph, bestQn, selectedCodec, currentSelectedCdnHost)
-        val selectedCdnHost = if (currentSelectedCdnHost.isEmpty() && panelOptions.cdnOptions.isNotEmpty()) {
-            panelOptions.cdnOptions.first().host
-        } else {
-            currentSelectedCdnHost
-        }
-
-        return PlayOptionParseResult(
-            selectedQn = bestQn,
-            selectedCdnHost = selectedCdnHost,
-            qualityOptions = panelOptions.qualityOptions,
-            cdnOptions = panelOptions.cdnOptions,
-            codecOptions = panelOptions.codecOptions
-        )
-    }
-
-    fun buildPreferredUrl(
-        data: RoomPlayInfoData,
-        selectedCodec: String,
-        selectedQn: Int,
-        selectedCdnHost: String
-    ): String {
-        for (protocol in preferredProtocolList) {
-            for (format in preferredFormatList) {
-                val url = findStreamUrl(data, protocol, format, selectedCodec, selectedQn, selectedCdnHost)
-                if (url.isNotEmpty()) {
-                    return url
-                }
-            }
-        }
-        return ""
-    }
-
     fun buildAllUrls(data: RoomPlayInfoData): List<String> {
         val urlList = mutableListOf<String>()
         val preferredQnList = listOf(10000, 400, 250, 150, 80)
@@ -222,7 +182,9 @@ class PlayStreamResolver {
                 for (format in stream.format) {
                     if (format.formatName == targetFormat) {
                         for (codec in format.codec) {
-                            if (codec.codecName == targetCodec && codec.acceptQn.contains(targetQn)) {
+                            if (codec.codecName == targetCodec && codec.acceptQn.contains(targetQn)
+                                && isPlayable(codec.codecName, format.formatName)
+                            ) {
                                 for (urlInfo in codec.urlInfo) {
                                     val cdnName = urlInfo.host.substringAfter("://").substringBefore(".")
                                     if (targetCdn.isEmpty() || cdnName == targetCdn) {
@@ -251,7 +213,9 @@ class PlayStreamResolver {
                 for (format in stream.format) {
                     if (format.formatName == targetFormat) {
                         for (codec in format.codec) {
-                            if (codec.codecName == targetCodec && codec.acceptQn.contains(targetQn)) {
+                            if (codec.codecName == targetCodec && codec.acceptQn.contains(targetQn)
+                                && isPlayable(codec.codecName, format.formatName)
+                            ) {
                                 for (urlInfo in codec.urlInfo) {
                                     urls.add("${urlInfo.host.trim()}${codec.baseUrl}${urlInfo.extra}")
                                 }
@@ -262,24 +226,6 @@ class PlayStreamResolver {
             }
         }
         return urls
-    }
-
-    private fun chooseBestQuality(qualitySet: Set<Int>, preferredQn: Int): Int {
-        if (qualitySet.isEmpty()) {
-            return preferredQn
-        }
-        if (qualitySet.contains(preferredQn)) {
-            return preferredQn
-        }
-        val maxQn = qualitySet.maxOrNull() ?: preferredQn
-        val minQn = qualitySet.minOrNull() ?: preferredQn
-        if (maxQn < preferredQn) {
-            return maxQn
-        }
-        if (minQn > preferredQn) {
-            return minQn
-        }
-        return qualitySet.filter { it < preferredQn }.maxOrNull() ?: maxQn
     }
 
     private fun pickBestCandidate(candidates: List<StreamCapability>): StreamCapability? {
@@ -299,16 +245,20 @@ class PlayStreamResolver {
         return candidates.firstOrNull()
     }
 
+    /**
+     * 编码优先级：用户显式选择的编码优先；未选择时默认 avc（兼容性最好）。
+     * 修复：原实现 avc 无条件排第一，导致手动选择 hevc 被静默忽略。
+     */
     private fun buildCodecPriority(availableCodec: Set<String>, preferredCodec: String): List<String> {
         if (availableCodec.isEmpty()) {
             return emptyList()
         }
         val result = mutableListOf<String>()
-        if (availableCodec.contains("avc")) {
-            result.add("avc")
-        }
-        if (preferredCodec.isNotEmpty() && availableCodec.contains(preferredCodec) && !result.contains(preferredCodec)) {
+        if (preferredCodec.isNotEmpty() && availableCodec.contains(preferredCodec)) {
             result.add(preferredCodec)
+        }
+        if (availableCodec.contains("avc") && !result.contains("avc")) {
+            result.add("avc")
         }
         result.addAll(availableCodec.filter { !result.contains(it) }.sorted())
         return result
