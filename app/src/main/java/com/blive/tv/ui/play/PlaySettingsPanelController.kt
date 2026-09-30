@@ -57,9 +57,14 @@ class PlaySettingsPanelController(
     fun show() {
         if (isVisible) return
         isVisible = true
+        settingsPanel.animate().cancel()
+        // 先推到屏幕外再显示，避免 GONE→VISIBLE 的第一帧以 translationY=0 闪现展开效果。
+        // GONE 时 height=0 无法用面板高度，先用父容器高度（面板贴底，必然在屏幕外）
+        settingsPanel.translationY =
+            (settingsPanel.parent as? View)?.height?.toFloat()?.takeIf { it > 0f } ?: Float.MAX_VALUE
         settingsPanel.visibility = View.VISIBLE
-        // 底部滑入动画
         settingsPanel.post {
+            // 布局完成后按面板实际高度校准初始位置，再从底部滑入
             settingsPanel.translationY = settingsPanel.height.toFloat()
             settingsPanel.animate().translationY(0f).setDuration(200).start()
             focusActiveCategory()
