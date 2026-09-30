@@ -3,11 +3,9 @@ package com.blive.tv.ui.settings
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
-import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
@@ -30,8 +28,9 @@ import kotlinx.coroutines.launch
  * - 右侧内容列：当前分类下的设置项
  *
  * 交互：
- * - DPAD_UP/DOWN 在左侧分类间移动，右侧内容同步刷新
- * - DPAD_RIGHT 从左侧进入右侧，DPAD_LEFT 从右侧第一列返回左侧
+ * - 左侧分类列：DPAD_UP/DOWN 切换分类（右侧内容同步刷新），DPAD_RIGHT 进入右侧
+ * - 右侧设置项（锁定式调节）：确认键锁定设置项，锁定后左右键切换值；
+ *   返回键解除锁定，未锁定时方向键正常移动焦点（左键回到分类列）
  * - BACK 关闭对话框
  */
 class SettingsDialogFragment : DialogFragment() {
@@ -40,13 +39,9 @@ class SettingsDialogFragment : DialogFragment() {
 
     private lateinit var rvCategories: RecyclerView
     private lateinit var rvSettings: RecyclerView
-    private lateinit var btnClose: Button
 
     private lateinit var categoryAdapter: CategoryAdapter
     private lateinit var settingItemAdapter: SettingItemAdapter
-
-    // 记录每个分类右侧上次的焦点位置，切回来时恢复
-    private val lastFocusPositions = mutableMapOf<SettingsCategory, Int>()
 
     private val qualityMap = linkedMapOf(
         "原画" to 10000,
@@ -87,12 +82,9 @@ class SettingsDialogFragment : DialogFragment() {
 
         rvCategories = view.findViewById(R.id.rv_categories)
         rvSettings = view.findViewById(R.id.rv_settings)
-        btnClose = view.findViewById(R.id.btn_close)
 
         setupCategories()
         setupSettings()
-
-        btnClose.setOnClickListener { dismiss() }
 
         observeUpdateCheckState()
 
@@ -114,18 +106,15 @@ class SettingsDialogFragment : DialogFragment() {
         )
         rvCategories.layoutManager = LinearLayoutManager(requireContext())
         rvCategories.adapter = categoryAdapter
+        // 关闭默认 change 动画：焦点项重绑时视图被替换会导致焦点漂移级联（崩溃根源之一）
+        rvCategories.itemAnimator = null
     }
 
     private fun setupSettings() {
-        settingItemAdapter = SettingItemAdapter(
-            onNavigateBack = {
-                // 从右侧按 LEFT 回到左侧分类列
-                val position = categoryAdapter.focusedCategory.ordinal
-                rvCategories.findViewHolderForAdapterPosition(position)?.itemView?.requestFocus()
-            }
-        )
+        settingItemAdapter = SettingItemAdapter()
         rvSettings.layoutManager = LinearLayoutManager(requireContext())
         rvSettings.adapter = settingItemAdapter
+        rvSettings.itemAnimator = null
     }
 
     /** 根据分类渲染右侧设置项 */
@@ -136,16 +125,6 @@ class SettingsDialogFragment : DialogFragment() {
             SettingsCategory.UPDATE -> buildUpdateItems()
         }
         settingItemAdapter.submitList(items)
-
-        // 恢复该分类上次的焦点位置
-        val lastPos = lastFocusPositions[category] ?: 0
-        rvSettings.post {
-            if (rvSettings.hasFocus() || rvSettings.isFocused) {
-                // 焦点已经在右侧，恢复位置
-                settingItemAdapter.notifyDataSetChanged()
-                rvSettings.findViewHolderForAdapterPosition(lastPos)?.itemView?.requestFocus()
-            }
-        }
     }
 
     // ---------------- 播放 ----------------
@@ -166,7 +145,6 @@ class SettingsDialogFragment : DialogFragment() {
                 onChanged = { newIndex ->
                     val qn = qualityMap[qualityNames[newIndex]] ?: 10000
                     UserPreferencesManager.setQualityQn(ctx, qn)
-                    refreshSettings()
                 }
             )
         )
@@ -200,7 +178,6 @@ class SettingsDialogFragment : DialogFragment() {
                 currentIndex = if (isEnabled) 0 else 1,
                 onChanged = { newIndex ->
                     UserPreferencesManager.setDanmakuEnabled(ctx, newIndex == 0)
-                    refreshSettings()
                 }
             ),
             SettingItem.CycleOption(
@@ -210,7 +187,6 @@ class SettingsDialogFragment : DialogFragment() {
                 currentIndex = sizeIndex,
                 onChanged = { newIndex ->
                     UserPreferencesManager.setDanmakuSizeScale(ctx, danmakuSizes[newIndex])
-                    refreshSettings()
                 }
             ),
             SettingItem.CycleOption(
@@ -220,7 +196,6 @@ class SettingsDialogFragment : DialogFragment() {
                 currentIndex = alphaIndex,
                 onChanged = { newIndex ->
                     UserPreferencesManager.setDanmakuAlpha(ctx, danmakuAlphas[newIndex])
-                    refreshSettings()
                 }
             ),
             SettingItem.CycleOption(
@@ -230,7 +205,6 @@ class SettingsDialogFragment : DialogFragment() {
                 currentIndex = speedIndex,
                 onChanged = { newIndex ->
                     UserPreferencesManager.setDanmakuSpeed(ctx, danmakuSpeeds[newIndex])
-                    refreshSettings()
                 }
             ),
             SettingItem.CycleOption(
@@ -240,7 +214,6 @@ class SettingsDialogFragment : DialogFragment() {
                 currentIndex = areaIndex,
                 onChanged = { newIndex ->
                     UserPreferencesManager.setDanmakuArea(ctx, danmakuAreas[newIndex])
-                    refreshSettings()
                 }
             )
         )
@@ -274,7 +247,6 @@ class SettingsDialogFragment : DialogFragment() {
                         else -> UpdateRepository.SourceMode.AUTO
                     }
                     updateViewModel.setSourceMode(newMode)
-                    refreshSettings()
                 }
             ),
             SettingItem.Action(
@@ -289,11 +261,6 @@ class SettingsDialogFragment : DialogFragment() {
                 value = "v" + BuildConfig.VERSION_NAME
             )
         )
-    }
-
-    /** 根据当前分类重新构建右侧列表 */
-    private fun refreshSettings() {
-        renderSettingsFor(categoryAdapter.focusedCategory)
     }
 
     // ---------------- 检查更新 ----------------
