@@ -126,11 +126,23 @@ object UpdateRepository {
         val githubResult = githubDeferred.await()
         val giteeResult = giteeDeferred.await()
 
+        selectAutoInfo(githubResult, giteeResult)
+    }
+
+    /**
+     * AUTO 模式双源结果选择（纯逻辑，供单测）：
+     * - 两个都成功 → 取版本号更新的（防止两边不同步）
+     * - 只有一个成功 → 用那个
+     * - 都失败 → 抛聚合异常
+     */
+    internal fun selectAutoInfo(
+        githubResult: Result<UpdateInfo>,
+        giteeResult: Result<UpdateInfo>
+    ): UpdateInfo {
         val githubInfo = githubResult.getOrNull()
         val giteeInfo = giteeResult.getOrNull()
 
-        when {
-            // 两个都成功 → 选版本号更新的那个（防止两边不同步）
+        return when {
             githubInfo != null && giteeInfo != null -> {
                 if (VersionComparator.isNewer(giteeInfo.versionName, githubInfo.versionName)) {
                     giteeInfo

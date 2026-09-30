@@ -44,11 +44,31 @@ object UpdateChecker {
      */
     fun shouldAutoPrompt(context: Context, remote: UpdateInfo): Boolean {
         val p = prefs(context)
-        if (p.getString(KEY_IGNORED_VERSION, null) == remote.versionName) return false
-        val lastVersion = p.getString(KEY_LAST_PROMPTED_VERSION, null)
-        val lastTime = p.getLong(KEY_LAST_PROMPT_TIME, 0L)
-        if (lastVersion == remote.versionName &&
-            System.currentTimeMillis() - lastTime < PROMPT_INTERVAL_MS
+        return shouldAutoPrompt(
+            remoteVersion = remote.versionName,
+            ignoredVersion = p.getString(KEY_IGNORED_VERSION, null),
+            lastPromptedVersion = p.getString(KEY_LAST_PROMPTED_VERSION, null),
+            lastPromptTime = p.getLong(KEY_LAST_PROMPT_TIME, 0L),
+            now = System.currentTimeMillis()
+        )
+    }
+
+    /**
+     * 纯逻辑版本（无 Android 依赖，供单测）：
+     * - 忽略的版本 → false
+     * - 同一版本 24h 内已提示过 → false
+     * - 其余 → true
+     */
+    internal fun shouldAutoPrompt(
+        remoteVersion: String,
+        ignoredVersion: String?,
+        lastPromptedVersion: String?,
+        lastPromptTime: Long,
+        now: Long
+    ): Boolean {
+        if (ignoredVersion == remoteVersion) return false
+        if (lastPromptedVersion == remoteVersion &&
+            now - lastPromptTime < PROMPT_INTERVAL_MS
         ) {
             return false
         }
