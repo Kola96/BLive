@@ -45,8 +45,9 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.release
-            minifyEnabled = true
-            shrinkResources = true
+            // 项目已开源（MIT），混淆无保护价值，且持续制造 Retrofit/Gson 反射兼容问题
+            minifyEnabled = false
+            shrinkResources = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
