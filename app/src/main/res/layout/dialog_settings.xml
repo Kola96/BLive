@@ -52,15 +52,4 @@
             android:overScrollMode="never" />
     </LinearLayout>
 
-    <Button
-        android:id="@+id/btn_close"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
-        android:text="@string/close"
-        android:textSize="16sp"
-        android:textColor="@android:color/white"
-        android:background="@drawable/option_selector_background"
-        android:padding="12dp" />
-
 </LinearLayout>

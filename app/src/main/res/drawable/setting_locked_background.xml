@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 设置项锁定态背景：主题粉，与未锁定时的半透明背景形成强对比 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FF4081" />
+    <corners android:radius="8dp" />
+</shape>
