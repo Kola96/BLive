@@ -12,7 +12,14 @@
 -keep class com.blive.tv.danmu.DanmuItem { *; }
 
 # ---------- Retrofit / OkHttp ----------
--keepattributes Signature, InnerClasses, EnclosingMethod, RuntimeVisibleAnnotations, AnnotationDefault
+-keepattributes Signature, InnerClasses, EnclosingMethod, RuntimeVisibleAnnotations, AnnotationDefault, LocalVariableTable, LocalVariableTypeTable, MethodParameters
+# Retrofit 判断 suspend 函数依赖 kotlin.coroutines.Continuation 的类型名，
+# 若被 R8 重命名则无法识别 suspend，返回类型退化为裸 Call，导致
+# ClassCastException: Class cannot be cast to ParameterizedType（release 包启动即检查更新时触发）
+-keep class kotlin.coroutines.Continuation { *; }
+-keep,allowshrinking interface com.blive.tv.data.update.api.* {
+    <methods>;
+}
 -keepclassmembers,allowshrinking,allowobfuscation interface * {
     @retrofit2.http.* <methods>;
 }
